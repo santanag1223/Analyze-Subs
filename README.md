@@ -1,4 +1,4 @@
-### *From Undergrad Research at TAMU*
+### *From My Undergrad Research at TAMU*
 # Analyze Submissions `(analyzeSubs.py)`
 - Python Script that takes submissions.zip file and outputs an Excel spreadsheet to analyize data from submissions. 
 
