@@ -1,27 +1,26 @@
 import os 
 import shutil
-import argparse
+from argparse import ArgumentParser
 from time import time
 from pandas import DataFrame, concat
 from tqdm import tqdm
 from numpy.core.numeric import NaN
 
-
 # pass args through argparse 
 def get_args():
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
     parser.add_argument("subdir"     , help = "zipped submissions data file or path to file", type = str)
     parser.add_argument('-a', "--all", help = "compile all submissions", action = "store_true")
     args   = parser.parse_args()
     return args
 
 # returns if the argument is a path or not
-def is_path(str):
-    if '/' in str:  return True
+def is_path(path: str):
+    if '/' in path: return True
     else:           return False
 
 # return unzipped folder in current dir from a path to a zip
-def unzip_from_path(zip_path):
+def unzip_from_path(zip_path: str):
     
     start_dir = os.getcwd()
     
@@ -39,13 +38,13 @@ def unzip_from_path(zip_path):
     return zipFolder                                # return working unzip file
 
 # unzip current folder and return new name
-def unzip_folder(zipFile):
+def unzip_folder(zipFile: str):
     nozip = zipFile.replace('.zip','')
     shutil.unpack_archive(zipFile, nozip)
     return nozip
 
 # compiles a zipped submission folder / returns 1 for compiling and 0 for not
-def comp_sub(zippedSub):
+def comp_sub(zippedSub: str):
     try   : temp = unzip_folder(zippedSub)          # unzip folder to new dir
     except: return -1                               # if not a zip file, return -1
     
@@ -64,7 +63,7 @@ def comp_sub(zippedSub):
 
 # compiles every student's last sub in students dir | returns list of 1s and 0s
 # returns 2 lists: [studentIDs, finalCompiles]
-def comp_final_subs(studentsDir):
+def comp_final_subs(studentsDir: str):
     studentIDs    = []
     finalCompiles = []
     totSubs       = 0
@@ -84,7 +83,7 @@ def comp_final_subs(studentsDir):
         
 # compiles all zipped subs for each student in students dir
 # returns 3 lists: [studentIDs, finalCompiles, allCompiles]
-def comp_all_subs(studentsDir):
+def comp_all_subs(studentsDir: str):
     studentIDs = []
     subNums    = []
     compiles   = []
