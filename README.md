@@ -1,5 +1,5 @@
-### *From My Undergrad Research at TAMU*
-# Analyze Submissions `(analyzeSubs.py)`
+### *From My Research at Texas A&M University*
+# Analyze Submissions `analyzeSubs.py`
 - Python Script that takes submissions.zip file and outputs an Excel spreadsheet to analyize data from submissions. 
 
 - Program has two arguments to be passed when running:
