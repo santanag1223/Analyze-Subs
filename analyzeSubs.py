@@ -1,26 +1,395 @@
 import os 
 import shutil
-from argparse import ArgumentParser
-from time import time
+import argparse
+from typing import List
+from time   import time
 from pandas import DataFrame, concat
-from tqdm import tqdm
+from tqdm   import tqdm
 from numpy.core.numeric import NaN
 
-# pass args through argparse 
+### submission class
+class submission:
+    """
+    submission Class acts as a container for all submission data.\n
+
+    Each submissions holds:
+    - Student ID
+    - submission Folder Name
+    - submission Number
+    - Compiled Boolean
+    - Error Type
+    - Error Line
+    """
+
+    studentID   = ""
+    sub_folder  = ""
+    subNum      = -1
+    is_compiled = False
+    error       = ""
+    errorLine   = ""
+
+    def __init__(self, studentID: str, folder: str):
+        self.studentID   = studentID
+        self.sub_folder  = folder
+        nozip            = folder.replace(".zip","")
+        self.subNum      = int(nozip.split("_")[1])
+        self.is_compiled = self.try_compile()
+
+    def try_compile(self)-> bool:
+        """Attempts compilation of submission.\n
+        returns True if 'a.out' is created after compilation.\n
+        calls 'get_error()' function if a.out not produced. """
+
+        # precausion for unzipped submission
+        try:
+            temp = unzip_folder(self.sub_folder)
+        except Exception: 
+            self.error = "SUB NOT .ZIP"
+            return False
+        
+        os.chdir(temp)
+        os.system("g++ -std=c++17 *.cpp -w 2>err.txt")
+
+        if "a.out" in os.listdir(): 
+            compiled    = True
+            self.error  = "No Error"
+        else:
+            compiled    = False
+            self.error  = self.get_error()
+
+        os.chdir("..")
+        try:   shutil.rmtree(temp)
+        except PermissionError: pass
+
+        return compiled
+
+    def get_error(self) -> str:
+        """Opens the submission's error file 'err.txt' and processes first error found.\n
+        returns a preset error type based on keywords in compiler output."""
+
+        syntax_keys  = set(" parse error "," expected "," redefinition "," overload "," stray "," unary "," token")
+        type_keys    = set(" type "," types ")
+        scope_keys   = set(" not declared "," no match ")
+        convert_keys = set(" cannot convert")
+        noMod_keys   = set(" no module ")
+        noFike_keys  = set(" no such file ")
+        exit1_keys   = set(" 1 exit status ")
+
+        try: 
+            with open("err.txt","r") as file:
+                for line in file.readlines():
+                    if " error: " in line:
+                        line = line.rstrip()
+                        line = line.lower()
+                        self.errorLine = line
+
+                        if error_search(syntax_keys,line):
+                            return "Syntax Error"
+
+                        if error_search(type_keys,line):
+                            return "Type Error"
+
+                        if error_search(scope_keys,line):
+                            return "Scope Error"
+
+                        if error_search(convert_keys,line):
+                            return "Converson Error"
+
+                        if error_search(noMod_keys,line):
+                            return "NoModuleFound Error"
+
+                        if error_search(noFike_keys,line):
+                            return "FileNotFound Error"
+
+                        if error_search(exit1_keys,line):
+                            return "Exit Status 1 Error"
+
+                        return "Unknown Error"
+        
+        except Exception:
+            return "COULD NOT READ"
+
+
+
 def get_args():
-    parser = ArgumentParser()
-    parser.add_argument("subdir"     , help = "zipped submissions data file or path to file", type = str)
+    """Parses command line and returns parser object."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subdir"     , help = "zipped submissions file in current directory or full path to file", type = str)
     parser.add_argument('-a', "--all", help = "compile all submissions", action = "store_true")
     args   = parser.parse_args()
     return args
 
-# returns if the argument is a path or not
-def is_path(path: str):
-    if '/' in path: return True
+def comp_final_subs(studentsDir) -> List[submission]:
+    """Takes the submissions .zip file and processes only the final submission of each student, returing a list of submissions."""
+
+    submissions = list()
+
+    os.chdir(studentsDir)
+    for student in tqdm(os.listdir(), desc = "Final Submissions", unit = "Student"):
+        
+        # go into each student dir 
+        os.chdir(student)       
+        
+        # get our final sub
+        finalSub = os.listdir()[-1]
+        submissions.append(submission(student, finalSub))
+
+        # steps back a directory
+        os.chdir('..')                              
+
+    os.chdir('..')
+    try:   shutil.rmtree(studentsDir)
+    except PermissionError: pass 
+
+    return submissions
+        
+def comp_all_subs(studentsDir) -> List[submission]:
+    """Takes the submissions .zip file and processes all submissions, returning a list of submissions."""
+
+    submissions = list() 
+    
+    os.chdir(studentsDir)
+    for student in tqdm(os.listdir(), desc = "All Students", unit = "Student"):
+        os.chdir(student) 
+        for sub in tqdm(os.listdir(), desc = "Current Student's submissions", leave = False, unit = "submission"):
+            submissions.append(submission(student, sub))
+        
+        os.chdir('..')
+
+    os.chdir('..')
+    try:   shutil.rmtree(studentsDir)
+    except PermissionError: pass
+
+    return submissions
+
+def all_subs_to_sheet(subDir: str, submissions: List[submission]):
+    """Takes the submission.zip filename and the processed submissions and creates excel spreadsheet with all submissions data."""
+
+    students          = list()
+    subNums           = list()
+    subCompiles       = list()
+    subErrors         = list()
+    errorLines        = list()
+    failedList        = list()
+    currStudent       = ""
+    syntaxErrors      = 0
+    typeErrors        = 0
+    scopeErrors       = 0
+    conversionErrors  = 0
+    noModuleErrors    = 0
+    missingFileErrors = 0
+    exitStatus1Errors = 0
+    unknownErrors     = 0
+    lastSub           = None
+    consecFailed      = 0
+
+
+    for sub in submissions:
+        
+        # Lists the student IDs correctly
+        if sub.studentID != currStudent:
+            students.append(sub.studentID)
+            currStudent = sub.studentID
+        else:
+            students.append(NaN)
+        
+        # Lists the rest of the Data
+        subNums.append(sub.subNum)
+        subCompiles.append(sub.is_compiled)
+        subErrors.append(sub.error)
+        errorLines.append(sub.errorLine)
+
+        # Get number of consecutive non-compiling subs
+        if lastSub != None:
+            if (subs_failed(lastSub,sub) and subs_same_student(lastSub,sub)):
+                consecFailed += 1
+            elif subs_same_student(lastSub,sub) == False:
+                failedList.append(consecFailed)
+                consecFailed = 0                
+
+        # Gets number of each error
+        err = sub.error
+        if err == "No Error":
+            pass
+        elif err == "Syntax Error":
+            syntaxErrors += 1
+        elif err == "Type Error":
+            typeErrors  += 1
+        elif err == "Scope Error":
+            scopeErrors += 1
+        elif err == "Converson Error":
+            conversionErrors += 1
+        elif err == "NoModuleFound Error":
+            noModuleErrors   += 1
+        elif err == "FileNotFound Error":
+            missingFileErrors += 1
+        elif err == "Exit Status 1 Error":
+            exitStatus1Errors += 1
+        else:
+            unknownErrors += 1
+        
+        lastSub = sub
+
+    # Main DataFrame to hold Sub Analysis Data
+    mainDF = DataFrame({
+        "Student IDs"        : students,
+        "submission #"       : subNums,
+        "submission Compiles": subCompiles,
+        "submission Error"   : subErrors,
+        "Error Line"         : errorLines
+    })
+
+    # Blank DataFrame for clearer exporting to Excel
+    blankDF = DataFrame({"":[]})
+
+    # DataFrame to hold the total number of subs
+    totalSubsDF = DataFrame({
+        "Total submissions" : [len(submissions)]
+    })
+
+    # DataFrames to hold error data
+    errorDF = DataFrame({
+        "Syntax Errors"         : [syntaxErrors]     ,
+        "Type Errors"           : [typeErrors]       ,
+        "Scope Errors"          : [scopeErrors]      ,
+        "Conversion Errors"     : [conversionErrors] ,
+        "NoModuleFound Errors"  : [noModuleErrors]   ,
+        "FileNotFound Errors"   : [missingFileErrors],
+        "Exit Status 1 Errors"  : [exitStatus1Errors],
+        "Unknown Errors"        : [unknownErrors]    ,
+        })
+    errorDF.swapaxes("index","columns")
+
+    # Dataframe to hold Concurent Failed submissions
+    try:
+        avgConsecFail = sum(failedList)/len(failedList)
+    except Exception:
+        avgConsecFail = 0
+    
+    consecFailedDF = DataFrame({
+        "Avg Consecutive Failed Subs" : [avgConsecFail]  ,
+        "Max Consecutive Failed Subs" : [max(failedList)],
+    })
+    #consecFailedDF.swapaxes("index","columns")
+
+    finalDF = concat([mainDF, blankDF, totalSubsDF,errorDF,blankDF,consecFailedDF], axis = 1)
+
+    try:
+        finalDF.to_excel(f"{subDir} submission Analysis.xlsx", sheet_name = "Submission Analysis", index = False)
+
+    except PermissionError:
+        print("a previous version of the spreadsheet is open, creating a temp spreadsheet...")
+        finalDF.to_excel(f"{subDir}_TEMP submission Analysis.xlsx", sheet_name = "Submission Analysis", index = False)
+
+def final_subs_to_sheet(subDir: str, submissions: List[submission]):
+    """Takes the submission.zip filename and the processed submissions and creates excel spreadsheet with all submissions data."""
+
+    students          = list()
+    subNums           = list()
+    subCompiles       = list()
+    subErrors         = list()
+    errorLines        = list()
+    currStudent       = ""
+    syntaxErrors      = 0
+    typeErrors        = 0
+    scopeErrors       = 0
+    conversionErrors  = 0
+    noModuleErrors    = 0
+    missingFileErrors = 0
+    exitStatus1Errors = 0
+    unknownErrors     = 0
+
+
+    for sub in submissions:
+        
+        # Lists the student IDs correctly
+        if sub.studentID != currStudent:
+            students.append(sub.studentID)
+            currStudent = sub.studentID
+        else:
+            students.append(NaN)
+        
+        # Lists the rest of the Data
+        subNums.append(sub.subNum)
+        subCompiles.append(sub.is_compiled)
+        subErrors.append(sub.error)
+        errorLines.append(sub.errorLine)             
+
+        # Gets number of each error
+        err = sub.error
+        if err == "No Error":
+            pass
+        elif err == "Syntax Error":
+            syntaxErrors += 1
+        elif err == "Type Error":
+            typeErrors  += 1
+        elif err == "Scope Error":
+            scopeErrors += 1
+        elif err == "Converson Error":
+            conversionErrors += 1
+        elif err == "NoModuleFound Error":
+            noModuleErrors   += 1
+        elif err == "FileNotFound Error":
+            missingFileErrors += 1
+        elif err == "Exit Status 1 Error":
+            exitStatus1Errors += 1
+        else:
+            unknownErrors += 1
+        
+    # Main DataFrame to hold Sub Analysis Data
+    mainDF = DataFrame({
+        "Student IDs"        : students,
+        "submission #"       : subNums,
+        "submission Compiles": subCompiles,
+        "submission Error"   : subErrors,
+        "Error Line"         : errorLines
+    })
+
+    # Blank DataFrame for clearer exporting to Excel
+    blankDF = DataFrame({"":[]})
+
+    # DataFrame to hold the total number of subs
+    totalSubsDF = DataFrame({
+        "Total submissions" : [len(submissions)]
+    })
+
+    # DataFrames to hold error data
+    errorDF = DataFrame({
+        "Syntax Errors"         : [syntaxErrors]     ,
+        "Type Errors"           : [typeErrors]       ,
+        "Scope Errors"          : [scopeErrors]      ,
+        "Conversion Errors"     : [conversionErrors] ,
+        "NoModuleFound Errors"  : [noModuleErrors]   ,
+        "FileNotFound Errors"   : [missingFileErrors],
+        "Exit Status 1 Errors"  : [exitStatus1Errors],
+        "Unknown Errors"        : [unknownErrors]    ,
+        })
+    
+    errorDF.swapaxes("index","columns")
+
+    finalDF = concat([mainDF, blankDF, totalSubsDF,errorDF,blankDF], axis = 1)
+
+    try:
+        finalDF.to_excel(f"{subDir} submission Analysis.xlsx", sheet_name = "Submission Analysis", index = False)
+
+    except PermissionError:
+        print("a previous version of the spreadsheet is open, creating a temp spreadsheet...")
+        finalDF.to_excel(f"{subDir}_TEMP submission Analysis.xlsx", sheet_name = "Submission Analysis", index = False)
+
+
+
+### helper functions
+def is_path(dir: str) -> bool:
+    """Checks if string is a path to a directory, returns True if '/' is present in the string."""
+
+    if '/' in dir:  return True
     else:           return False
 
-# return unzipped folder in current dir from a path to a zip
-def unzip_from_path(zip_path: str):
+def unzip_from_path(zip_path: str) -> str:
+    """Copies '.zip' from another directory into current directory and unzips locally.\n
+    deletes the '.zip' folder copied over after unzipping it\n
+    returns new unzipped folder name """
     
     start_dir = os.getcwd()
     
@@ -37,139 +406,81 @@ def unzip_from_path(zip_path: str):
 
     return zipFolder                                # return working unzip file
 
-# unzip current folder and return new name
-def unzip_folder(zipFile: str):
+def unzip_folder(zipFile: str) -> str:
+    """Unzips folder inside of current directory\n
+    returns new unzipped folder name """
+
     nozip = zipFile.replace('.zip','')
-    shutil.unpack_archive(zipFile, nozip)
+    shutil.unpack_archive(zipFile, nozip,'zip')
     return nozip
 
-# compiles a zipped submission folder / returns 1 for compiling and 0 for not
-def comp_sub(zippedSub: str):
-    try   : temp = unzip_folder(zippedSub)          # unzip folder to new dir
-    except: return -1                               # if not a zip file, return -1
-    
-    os.chdir(temp)                                  # open unzipped folder
-    os.system("g++ -std=c++17 *.cpp -w 2> /dev/null") # try to compile cpp files
+def is_substr(substr: str, mainstr: str) -> bool:
+    """Checks if a string is a substring of another.\n
+    returns true if substr is a substr of mainstr."""
 
-    if "a.out" in os.listdir():                     # if a.out exists, return 1 for compiling
-        compiled = 1
-    else:                                           # otherwise, return 0 for not compiling
-        compiled = 0
-    
-    os.chdir('..')                                  # return to starting dir
-    shutil.rmtree(temp)                             # delete temp folder
+    if mainstr.find(substr) == -1:
+        return False
+    else:
+        return True
 
-    return compiled                                 # return 1 or 0
+def error_search(keywords: set[str], errorline: str) -> bool:
+    for keyword in keywords:
+        if is_substr(keyword, errorline): return True
 
-# compiles every student's last sub in students dir | returns list of 1s and 0s
-# returns 2 lists: [studentIDs, finalCompiles]
-def comp_final_subs(studentsDir: str):
-    studentIDs    = []
-    finalCompiles = []
-    totSubs       = 0
+    return False
 
-    os.chdir(studentsDir)
-    for student in tqdm(os.listdir(), desc = "Student's Final Submissions",unit = "Student"):
-        os.chdir(student)                           # go into each student dir
-        studentIDs.append(student)                  # add student student to list
-        
-        totSubs += len(os.listdir())                # count how many subs in each dir
+def subs_failed(sub1: submission, sub2: submission) -> bool:
+    """Checks if two submissions both could not be compiled."""
 
-        finalSub = os.listdir()[-1]                 # get our final sub
-        finalCompiles.append(comp_sub(finalSub))
-        
-        os.chdir('..')                              # steps back a directory
-    return studentIDs, finalCompiles, totSubs
-        
-# compiles all zipped subs for each student in students dir
-# returns 3 lists: [studentIDs, finalCompiles, allCompiles]
-def comp_all_subs(studentsDir: str):
-    studentIDs = []
-    subNums    = []
-    compiles   = []
-    totSubs    = 0
-    
-    os.chdir(studentsDir)
-    for student in tqdm(os.listdir(), desc = "All Students", unit = "Student"):
-        os.chdir(student)                           # enter each student folder
-        
-        studentIDs.append(student)                  # add student to list of IDs
-        subNums.append(NaN)
-        compiles.append(NaN)
-        subNum   = 1                  
-        totSubs += len(os.listdir())
+    return (sub1.is_compiled == False) and (sub2.is_compiled == False)
 
-        for sub in tqdm(os.listdir(), desc = "Current Student's Submissions", leave = False, unit = "Submission"):
-            compiles.append(comp_sub(sub))          # add whether each sub compiles or not
-            subNums.append(subNum)                  # add submission num to list
-            studentIDs.append('')                   # add blank student name to list
-            subNum += 1                             # iterate counter
-        
-        os.chdir('..')
-    return studentIDs, subNums, compiles, totSubs
- 
+def subs_same_student(sub1: submission, sub2: submission) -> bool:
+    """Checks if two submissions have the same author."""
+
+    return (sub1.studentID == sub2.studentID)
+
+
 def main():
-    args       = get_args()                         # get our args from argparse
-    studentDir = args.subdir
-    allSubs    = args.all
     
-    if is_path(studentDir):                         # check if arg is a path or folder in dir
-        try:                                        # try to unzip folder from path
-            studentDir = unzip_from_path(studentDir)
-        except FileNotFoundError: 
-            print(f"Directory '{studentDir}' doesn't exsist or couldn't be opened.")
+    args        = get_args()
+    studentsDir = args.subdir
+    allSubs     = args.all
+    
+    # check if arg is a path or folder in dir
+    if is_path(studentsDir):
+
+        # try to unzip file to folder in dir
+        try:                
+            studentsDir = unzip_from_path(studentsDir)
+        except FileNotFoundError as e:
+            print(f"Directory '{studentsDir}' could not be found.\n",e)
             quit()
-    
     else:
-        try:                                        # try to unzip file to folder in dir
+
+        try:
             print("unzipping file...")
-            studentDir = unzip_folder(studentDir)
-        except FileNotFoundError: 
-            print(f"Directory '{studentDir}' doesn't exsist or couldn't be opened.")
+            studentsDir = unzip_folder(studentsDir)
+        except FileNotFoundError as e: 
+            print(f"Directory '{studentsDir}' could not be found.\n",e)
             quit()
-
-    # the user either wants all subs compiled, or just the final subs compiled
+        except shutil.ReadError as e:
+            print(f"'{studentsDir}' could not be unzipped.\n",e)
+            quit() 
+    
     if allSubs:
-        IDs, subNums, compiles, totSubs = comp_all_subs(studentDir)
+        submissions = comp_all_subs(studentsDir)
+        all_subs_to_sheet(studentsDir, submissions)
+
     else:
-        IDs, finalComps, totSubs        = comp_final_subs(studentDir)
+        submissions = comp_final_subs(studentsDir)
+        final_subs_to_sheet(studentsDir, submissions)
 
-    # delete our unzipped file
-    os.chdir('..')
-    shutil.rmtree(studentDir) 
 
-    # create our pandas data frames and concatenate them if necessary 
-    if allSubs:    
-        df = DataFrame({
-            "Student IDs: "          : IDs,
-            "Submission Number: "    : subNums,
-            "Submission Compiles:"   : compiles,
-        })
-        df1 = DataFrame({"": []})
-        df2 = DataFrame({"Total Submissions" : [totSubs] })
-        df  = concat([df,df1,df2], axis = 1)
-    else:
-        df = DataFrame({
-            "Student IDs:"               : IDs,
-            "Final Submission Compiles:" : finalComps
-        })
-        df1 = DataFrame({"": []})
-        df2 = DataFrame({"Total Submissions" : [totSubs] })
-        df  = concat([df,df1,df2], axis = 1)
 
-    # create our excel spreadsheet
-    try:
-        if allSubs:
-            df.to_excel(f"./{studentDir} - All Submissions.xlsx"  , sheet_name = "All Submissions"  , index = False)
-        else:
-            df.to_excel(f"./{studentDir} - Final Submissions.xlsx", sheet_name = "Final Submissions", index = False)
-    except: 
-        print("A copy of this spreadsheet already exists! Make sure to move or rename the old spreadsheet!")
-        print("Creating temp.xlsx ...")
-        df.to_excel(f"./temp.xlsx", sheet_name = "Submissions", index = False, )
-
+### call to main function
 if __name__ == '__main__':
-    start_time = time()
+    start   = time()
     main()
-    end_time = time()
-    print("Finished!\nTotal script runtime was: ", (end_time - start_time))
+    end     = time()
+    run     = end - start
+    print(f"Total runtime - {int(run/60)}:{int(run % 60)}")
