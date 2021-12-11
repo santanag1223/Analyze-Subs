@@ -286,10 +286,9 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission]):
             "Avg Consecutive Failed Subs" : [avgConsecFail]  ,
             "Max Consecutive Failed Subs" : [max(failedList)],
         })
-    #consecFailedDF.swapaxes("index","columns")
-
-    if      allSubs:    finalDF = concat([mainDF, blankDF, dataDF,blankDF,consecFailedDF], axis = 1)
-    else:               finalDF = concat([mainDF, blankDF, dataDF                       ], axis = 1)
+        finalDF = concat([mainDF, blankDF, dataDF,blankDF,consecFailedDF], axis = 1)
+    else:
+        finalDF = concat([mainDF, blankDF, dataDF                       ], axis = 1)
 
     try:
         finalDF.to_excel(f"{subDir} submission Analysis.xlsx"       , sheet_name = "Submission Analysis", index = False)
