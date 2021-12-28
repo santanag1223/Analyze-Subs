@@ -1,14 +1,23 @@
 ### *From My Research at Texas A&M University*
 # Analyze Submissions `analyzeSubs.py`
-- Python Script that takes submissions.zip file and outputs an Excel spreadsheet to analyize data from submissions. 
 
-- Program has two arguments to be passed when running:
+## Description:
+Python Script that takes C++ assignment submissions in a zipfile and outputs an Excel spreadsheet to analyize data from submissions.
 
-  - First is the zipfile. The zipfile should either be in the current directory OR a path to the zipfile from the root directory.
- 
-  - Second is an optional argument that allows for either all submissions to be compiled or only the final submissions. By Default it will only compile the final submissions, so passing '-a' will compile all submissions.
+See Subs_anonymized.zip for zipfile formatting.
 
-- to run the file input should be: `user$: python3 analyzeSubs.py <zipfile or zipfile path> <-a>`
+## Arguments:
+The Script has **1 required argument** and **2 optional arguments** to be passed when running:
+  - (required) &nbsp; *workingDir* : 
+<br /> The workingDir should be a zipfile either in the current directory OR a path to the zipfile from the root directory 
+<br /> (i.e. `/mnt/c/users/.../<workingDir>`)  
+  - (optional) &nbsp;  *allSubs* : 
+<br /> Allows for either all submissions to be compiled or only the final submissions of each student. By Default it will only compile the final submissions, passing `-a` or `--allSubs` will compile all submissions.
+  - (optional) &nbsp; *mulitSet*:
+<br /> Allows for a group of datasets to be ran together, and output into a single excel file. When running as a multiSet, the workingDir passed should be a path to a folder with multiple datasets (zipfiles) within it. Arguement *allSubs* is set to True.
 
 
-**Subs_anonymized.zip is a sample file**
+## How to run: 
+Terminal Input : `user$: <python / python3> analyzeSubs.py <workingDir> <-a OR -m>`
+
+Demo script with Subs_anonymized.zip
