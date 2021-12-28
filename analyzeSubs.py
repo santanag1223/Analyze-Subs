@@ -6,7 +6,6 @@ from time   import time
 from numpy  import nan
 from pandas import DataFrame, concat
 from tqdm   import tqdm
-from numpy.core.numeric import NaN
 
 ### submission class
 class submission:
@@ -24,17 +23,23 @@ class submission:
 
     studentID   = ""
     sub_folder  = ""
-    subNum      = -1
+    subNum      = 0
     is_compiled = False
     error       = ""
     errorLine   = ""
 
-    def __init__(self, studentID: str, folder: str):
-        self.studentID   = studentID
-        self.sub_folder  = folder
-        nozip            = folder.replace(".zip","")
-        self.subNum      = int(nozip.split("_")[1])
-        self.is_compiled = self.try_compile()
+    def __init__(self, studentID: str, folder: str, dataset: bool = False):
+        
+        if dataset:
+            self.studentID   = "**" + studentID + "**"
+            self.subNum      = nan
+            self.is_compiled = nan
+        else:
+            self.studentID   = studentID
+            self.sub_folder  = folder
+            nozip            = folder.replace(".zip","")
+            self.subNum      = int(nozip.split("_")[1])
+            self.is_compiled = self.try_compile()
 
     def try_compile(self)-> bool:
         """
@@ -116,8 +121,9 @@ def get_args():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("subdir"     , help = "zipped submissions file in current directory or full path to file", type = str)
-    parser.add_argument('-a', "--all", help = "compile all submissions", action = "store_true")
+    parser.add_argument("subdir"          , help = "zipped submissions file in current directory or full path to file", type = str)
+    parser.add_argument('-a', "--all"     , help = "compile all submissions"        , action = "store_true")
+    parser.add_argument('-m', '--multi', help = "Folder to multiple sets"        , action = "store_true")
     args   = parser.parse_args()
     return args
 
@@ -168,7 +174,7 @@ def comp_all_subs(studentsDir) -> List[submission]:
 
     return submissions
 
-def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission]):
+def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission], numOfSets: int = 0):
     """
     Takes the submission.zip filename and the processed submissions and creates excel spreadsheet with all submissions data.
     """
@@ -179,7 +185,7 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission]):
     syntaxErrors     , typeErrors           = 0, 0
     scopeErrors      , conversionErrors     = 0, 0
     noModuleErrors   , missingFileErrors    = 0, 0
-    exitStatus1Errors, unknownErrors        = 0, 0 
+    exitStatus1Errors, unknownErrors        = 0, 0 - numOfSets
     currStudent      , lastSub              = "", None
     consecFailed = 0
 
@@ -190,7 +196,7 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission]):
             students.append(sub.studentID)
             currStudent = sub.studentID
         else:
-            students.append(NaN)
+            students.append(nan)
         
         # Lists the rest of the Data
         subNums.append(sub.subNum)
@@ -231,7 +237,7 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission]):
         lastSub = sub
 
     totalErr = unknownErrors + exitStatus1Errors + missingFileErrors + conversionErrors + scopeErrors + typeErrors + syntaxErrors
-    totalSub = len(submissions)
+    totalSub = len(submissions) - numOfSets
 
     # Main DataFrame to hold Sub Analysis Data
     mainDF = DataFrame({
@@ -248,31 +254,31 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission]):
     # DataFrames to hold error data
     try: dataDF = DataFrame({
         "Total submissions"     : [totalSub         , nan                       , nan                       ],
-        ""                      : ["Error Count:"   , "Percent of Errors"       ,"Percent of all Submissions"],
-        "Syntax Errors"         : [syntaxErrors     , syntaxErrors/totalErr     , syntaxErrors/totalSub     ],
-        "Type Errors"           : [typeErrors       , typeErrors/totalErr       , typeErrors/totalSub       ],
-        "Scope Errors"          : [scopeErrors      , scopeErrors/totalErr      , scopeErrors/totalSub      ],
-        "Conversion Errors"     : [conversionErrors , conversionErrors/totalErr , conversionErrors/totalSub ],
-        "NoModuleFound Errors"  : [noModuleErrors   , noModuleErrors/totalErr   , noModuleErrors/totalSub   ],
-        "FileNotFound Errors"   : [missingFileErrors, missingFileErrors/totalErr, missingFileErrors/totalSub],
-        "Exit Status 1 Errors"  : [exitStatus1Errors, exitStatus1Errors/totalErr, exitStatus1Errors/totalSub],
-        "Unknown Errors"        : [unknownErrors    , unknownErrors/totalErr    , unknownErrors/totalSub    ],
-        "Total Errors"          : [totalErr         , totalErr/totalErr         , totalErr/allSubs          ],
+        ""                      : ["Error Count:"   , "Percent of Errors"      ,"Percent of all Submissions"],
+        "Syntax Errors"         : [syntaxErrors     , "{0:.0f}%".format(syntaxErrors/totalErr*100)     , "{0:.0f}%".format(syntaxErrors/totalSub*100)     ],
+        "Type Errors"           : [typeErrors       , "{0:.0f}%".format(typeErrors/totalErr*100)       , "{0:.0f}%".format(typeErrors/totalSub*100)       ],
+        "Scope Errors"          : [scopeErrors      , "{0:.0f}%".format(scopeErrors/totalErr*100)      , "{0:.0f}%".format(scopeErrors/totalSub*100)      ],
+        "Conversion Errors"     : [conversionErrors , "{0:.0f}%".format(conversionErrors/totalErr*100) , "{0:.0f}%".format(conversionErrors/totalSub*100) ],
+        "NoModuleFound Errors"  : [noModuleErrors   , "{0:.0f}%".format(noModuleErrors/totalErr*100)   , "{0:.0f}%".format(noModuleErrors/totalSub*100)   ],
+        "FileNotFound Errors"   : [missingFileErrors, "{0:.0f}%".format(missingFileErrors/totalErr*100), "{0:.0f}%".format(missingFileErrors/totalSub*100)],
+        "Exit Status 1 Errors"  : [exitStatus1Errors, "{0:.0f}%".format(exitStatus1Errors/totalErr*100), "{0:.0f}%".format(exitStatus1Errors/totalSub*100)],
+        "Unknown Errors"        : [unknownErrors    , "{0:.0f}%".format(unknownErrors/totalErr*100)    , "{0:.0f}%".format(unknownErrors/totalSub*100)    ],
+        "Total Errors"          : [totalErr         , 1                                                , "{0:.0f}%".format(totalErr/totalSub*100)          ],
         })
     except ZeroDivisionError:
         totalErr = 1
         dataDF = DataFrame({
         "Total submissions"     : [totalSub         , nan                       , nan                       ],
         ""                      : ["Error Count:"   , "Percent of Errors:"    ,"Percent of all Submissions:"],
-        "Syntax Errors"         : [syntaxErrors     , syntaxErrors/totalErr     , syntaxErrors/totalSub     ],
-        "Type Errors"           : [typeErrors       , typeErrors/totalErr       , typeErrors/totalSub       ],
-        "Scope Errors"          : [scopeErrors      , scopeErrors/totalErr      , scopeErrors/totalSub      ],
-        "Conversion Errors"     : [conversionErrors , conversionErrors/totalErr , conversionErrors/totalSub ],
-        "NoModuleFound Errors"  : [noModuleErrors   , noModuleErrors/totalErr   , noModuleErrors/totalSub   ],
-        "FileNotFound Errors"   : [missingFileErrors, missingFileErrors/totalErr, missingFileErrors/totalSub],
-        "Exit Status 1 Errors"  : [exitStatus1Errors, exitStatus1Errors/totalErr, exitStatus1Errors/totalSub],
-        "Unknown Errors"        : [unknownErrors    , unknownErrors/totalErr    , unknownErrors/totalSub    ],
-        "Total Errors"          : [0                , totalErr/totalErr         , 0/totalSub                ],
+        "Syntax Errors"         : [syntaxErrors     , "{0:.0f}%".format(syntaxErrors/totalErr*100)     , "{0:.0f}%".format(syntaxErrors/totalSub*100)     ],
+        "Type Errors"           : [typeErrors       , "{0:.0f}%".format(typeErrors/totalErr*100)       , "{0:.0f}%".format(typeErrors/totalSub*100)       ],
+        "Scope Errors"          : [scopeErrors      , "{0:.0f}%".format(scopeErrors/totalErr*100)      , "{0:.0f}%".format(scopeErrors/totalSub*100)      ],
+        "Conversion Errors"     : [conversionErrors , "{0:.0f}%".format(conversionErrors/totalErr*100) , "{0:.0f}%".format(conversionErrors/totalSub*100) ],
+        "NoModuleFound Errors"  : [noModuleErrors   , "{0:.0f}%".format(noModuleErrors/totalErr*100)   , "{0:.0f}%".format(noModuleErrors/totalSub*100)   ],
+        "FileNotFound Errors"   : [missingFileErrors, "{0:.0f}%".format(missingFileErrors/totalErr*100), "{0:.0f}%".format(missingFileErrors/totalSub*100)],
+        "Exit Status 1 Errors"  : [exitStatus1Errors, "{0:.0f}%".format(exitStatus1Errors/totalErr*100), "{0:.0f}%".format(exitStatus1Errors/totalSub*100)],
+        "Unknown Errors"        : [unknownErrors    , "{0:.0f}%".format(unknownErrors/totalErr*100)    , "{0:.0f}%".format(unknownErrors/totalSub*100)    ],
+        "Total Errors"          : [0                , 1                                                , 0                                                ],
         })
     
 
@@ -280,11 +286,13 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission]):
     if allSubs:
         try:
             avgConsecFail = sum(failedList)/len(failedList)
-        except ZeroDivisionError:
+            maxFailed     = max(failedList)
+        except Exception:
             avgConsecFail = 0
+            maxFailed     = 0
         consecFailedDF = DataFrame({
             "Avg Consecutive Failed Subs" : [avgConsecFail]  ,
-            "Max Consecutive Failed Subs" : [max(failedList)],
+            "Max Consecutive Failed Subs" : [maxFailed]      ,
         })
         finalDF = concat([mainDF, blankDF, dataDF,blankDF,consecFailedDF], axis = 1)
     else:
@@ -309,7 +317,8 @@ def is_path(dir: str) -> bool:
 def unzip_from_path(zip_path: str) -> str:
     """
     Copies '.zip' from another directory into current directory and unzips locally.\n
-    deletes the '.zip' folder copied over after unzipping it\n
+    deletes the '.zip' folder copied over after unzipping it
+
     returns new unzipped folder name
     """
     start_dir = os.getcwd()
@@ -329,7 +338,8 @@ def unzip_from_path(zip_path: str) -> str:
 
 def unzip_folder(zipFile: str) -> str:
     """
-    Unzips folder inside of current directory\n
+    Unzips folder inside of current directory.
+    
     returns new unzipped folder name
     """
 
@@ -339,7 +349,8 @@ def unzip_folder(zipFile: str) -> str:
 
 def error_search(keywords: List[str], errorLine: str) -> bool:
     """
-    Takes a set of keywords and the current error line and checks if a keyword in the set is within the error line.\n
+    Takes a set of keywords and the current error line and checks if a keyword in the set is within the error line.
+    
     returns true if a keyword is found.
     """
     for key in keywords:
@@ -347,18 +358,19 @@ def error_search(keywords: List[str], errorLine: str) -> bool:
     return False
 
 def subs_failed(sub1: submission, sub2: submission) -> bool:
-    """Checks if two submissions both could not be compiled."""
+    """
+    Checks if two submissions both could not be compiled.
+    """
     return (sub1.is_compiled == False) and (sub2.is_compiled == False)
 
 def same_student(sub1: submission, sub2: submission) -> bool:
-    """Checks if two submissions have the same author."""
+    """
+    Checks if two submissions have the same author.
+    """
     return (sub1.studentID == sub2.studentID)
 
 
-def main():
-    args        = get_args()
-    studentsDir = args.subdir
-    allSubs     = args.all
+def main(studentsDir: str, allsubs: bool):
     
     # check if arg is a path or folder in dir
     if is_path(studentsDir):
@@ -384,12 +396,46 @@ def main():
 
     subs_to_sheet(studentsDir, allSubs, submissions)
 
+def proc_all(studentsDir: str):
+    """
+    Compiles submissions from mulitple datasets and outputs to one excel sheet.
+    - Assumes subdir passed is a directory with multiple datasets.
+    - Compiles all submissions.
+    """
+
+    subs        = list()
+
+    os.chdir(studentsDir)
+    sets = 0
+
+    for zipFile in tqdm(os.listdir(), desc = "All Datasets", unit="Dataset"):
+        if not zipFile.endswith('.zip'): continue
+        file = unzip_folder(zipFile)
+
+        subs.append(submission(file, "", dataset=True))
+        sets += 1
+        subs.extend(comp_all_subs(file))
+
+    subs_to_sheet(studentsDir, allSubs, subs, numOfSets=sets)
+
+
+
+
 
 
 ### call to main function
 if __name__ == '__main__':
-    start   = time()
-    main()
+    start    = time()
+    args     = get_args()
+    subdir   = args.subdir
+    allSubs  = args.all
+    multi    = args.multi
+    
+    if multi:   proc_all(subdir)
+    else:       main(subdir, allSubs)
+
+    
+    
     end     = time()
     run     = end - start
     print(f"Total runtime - {int(run/60)}:{int(run % 60)}")
