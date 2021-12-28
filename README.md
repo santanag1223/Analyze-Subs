@@ -12,9 +12,10 @@ The Script has **1 required argument** and **2 optional arguments** to be passed
 <br /> The workingDir should be a zipfile either in the current directory OR a path to the zipfile from the root directory 
 <br /> (i.e. `/mnt/c/users/.../<workingDir>`)  
   - (optional) &nbsp;  *allSubs* : 
-<br /> Allows for either all submissions to be compiled or only the final submissions of each student. By Default it will only compile the final submissions, passing `-a` or `--allSubs` will compile all submissions.
+<br /> Allows for either all submissions to be compiled or only the final submissions of each student. By default it will only compile the final submissions, passing `-a` or `--allSubs` will compile all submissions.
   - (optional) &nbsp; *mulitSet*:
-<br /> Allows for a group of datasets to be ran together, and output into a single excel file. When running as a multiSet, the workingDir passed should be a path to a folder with multiple datasets (zipfiles) within it. Arguement *allSubs* is set to True.
+<br /> Allows for a group of datasets to be ran together, and output into a single excel file. When running as a multiSet, the *workingDir* passed should be a path to a folder with multiple datasets (zipfiles) within it. 
+<br /> By default the script assumes only one set, and is looking for a zipfile, passing `-m` or `--multiSet` allows for multiple sets to be analyzed. Arguement *allSubs* is set to True.
 
 
 ## How to run: 
