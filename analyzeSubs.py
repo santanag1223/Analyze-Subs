@@ -7,7 +7,6 @@ from numpy  import nan
 from pandas import DataFrame, concat
 from tqdm   import tqdm
 
-### submission class
 class submission:
     """
     submission Class acts as a container for all submission data.\n
@@ -121,9 +120,9 @@ def get_args():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("subdir"          , help = "zipped submissions file in current directory or full path to file", type = str)
-    parser.add_argument('-a', "--all"     , help = "compile all submissions"        , action = "store_true")
-    parser.add_argument('-m', '--multi', help = "Folder to multiple sets"        , action = "store_true")
+    parser.add_argument("workingDir"          , help = "zipped submissions file in current directory or full path to file", type = str)
+    parser.add_argument('-a', "--allSubs"     , help = "compile all submissions"        , action = "store_true")
+    parser.add_argument('-m', '--multiSet'    , help = "Folder to multiple sets"        , action = "store_true")
     args   = parser.parse_args()
     return args
 
@@ -423,13 +422,13 @@ def proc_all(studentsDir: str):
 
 
 
-### call to main function
+### call to main functions
 if __name__ == '__main__':
     start    = time()
     args     = get_args()
-    subdir   = args.subdir
-    allSubs  = args.all
-    multi    = args.multi
+    subdir   = args.workingDir
+    allSubs  = args.allSubs
+    multi    = args.multiSet
     
     if multi:   proc_all(subdir)
     else:       main(subdir, allSubs)
