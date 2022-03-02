@@ -2,39 +2,75 @@ import os
 import shutil
 import argparse
 from typing import List
-from time   import time
-from numpy  import nan
+from time   import time, strftime
+from numpy  import average, nan
 from pandas import DataFrame, concat
 from tqdm   import tqdm
+
+class student:
+    """
+    student class acts like a container for each student's submissions and basic info about student
+
+    Each student holds:
+    - Student ID
+    - All of the student's submissions
+    - time between first and last submission
+    - average time between submissions
+    """
+
+    studentID = ""
+    subs      = list()
+    numOfSubs = 0
+    workTime  = ""
+    avgTime   = ""
+
+    def __init__(self, folder: str):
+        self.studentID = folder.split(" ")[1]
+        self.__get_subs(folder)
+        self.__set_times()
+
+    def __get_subs(self, folder: str):
+        os.chdir(folder)
+        for subZip in os.listdir():
+            currSub = submission(subZip)
+            self.subs.append(currSub)
+            self.numOfSubs += 1
+
+    def __set_times(self):
+
+        # get list of all student submission times
+        subTimes = list()
+        for sub in self.subs: subTimes.append(sub.timeCreated)
+
+        self.workTime = strftime("%a, %d %b %Y %H:%M:%S +0000", (subTimes[-1] - subTimes[0]))
+        self.avgTime  = strftime("%a, %d %b %Y %H:%M:%S +0000", (average(subTimes)))
+
 
 class submission:
     """
     submission Class acts as a container for all submission data.\n
 
     Each submissions holds:
-    - Student ID
     - submission Folder Name
     - submission Number
     - Compiled Boolean
-    - Error Type
-    - Error Line
+    - (optional) Error Type
+    - (optional) Error Line
     """
 
-    studentID   = ""
     sub_folder  = ""
     subNum      = 0
+    timeCreated = 0
     is_compiled = False
-    error       = ""
+    error       = "Not Processed"
     errorLine   = ""
 
-    def __init__(self, studentID: str, folder: str, dataset: bool = False):
+    def __init__(self, folder: str,  dataset: bool = False):
         
         if dataset:
-            self.studentID   = "**" + studentID + "**"
             self.subNum      = nan
             self.is_compiled = nan
         else:
-            self.studentID   = studentID
             self.sub_folder  = folder
             nozip            = folder.replace(".zip","")
             self.subNum      = int(nozip.split("_")[1])
@@ -47,27 +83,35 @@ class submission:
         calls 'get_error()' function if a.out not produced. 
         """
 
-        # precausion for unzipped submission
+        # precausion for zipping error submission
         try:
             temp = unzip_folder(self.sub_folder)
         except Exception: 
-            self.error = "SUB NOT .ZIP"
+            self.error = "Could Not Unzip"
             return False
         
+        # go into unzipped folder
         os.chdir(temp)
+
+        # get time created (seconds since creation)
+        self.timeCreated = os.path.getmtime(os.listdir()[0])
+
+        # call compilation and check for 'a.out'
         os.system("g++ -std=c++17 *.cpp -w 2>err.txt -O0")
 
         if "a.out" in os.listdir(): 
             compiled    = True
-            self.error  = "No Error"
+            if (ERROR_PROC): self.error  = "No Error"
         else:
             compiled    = False
-            self.error  = self.get_error()
+            if (ERROR_PROC): self.error  = self.get_error()
 
+        # exit the unzipped folder and delete it
         os.chdir("..")
         try:   shutil.rmtree(temp)
         except PermissionError: pass
 
+        # return if submissions compiled
         return compiled
 
     def get_error(self) -> str:
@@ -123,6 +167,7 @@ def get_args():
     parser.add_argument("workingDir"          , help = "zipped submissions file in current directory or full path to file", type = str)
     parser.add_argument('-a', "--allSubs"     , help = "compile all submissions"        , action = "store_true")
     parser.add_argument('-m', '--multiSet'    , help = "Folder to multiple sets"        , action = "store_true")
+    parser.add_argument('-e', "--errorProc"   , help = "Processes submission errors"    , action = "store_true")
     args   = parser.parse_args()
     return args
 
@@ -173,7 +218,7 @@ def comp_all_subs(studentsDir) -> List[submission]:
 
     return submissions
 
-def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission], numOfSets: int = 0):
+def subs_to_sheet(subDir: str, submissions: List[submission], numOfSets: int = 0):
     """
     Takes the submission.zip filename and the processed submissions and creates excel spreadsheet with all submissions data.
     """
@@ -204,7 +249,7 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission], num
         errorLines.append(sub.errorLine)
 
         # Get number of consecutive non-compiling subs
-        if allSubs:
+        if ALL_SUBS:
             if lastSub != None:
                 if (subs_failed(lastSub,sub) and same_student(lastSub,sub)):
                     consecFailed += 1
@@ -282,7 +327,7 @@ def subs_to_sheet(subDir: str, allSubs: bool, submissions: List[submission], num
     
 
     # Dataframe to hold Concurent Failed submissions
-    if allSubs:
+    if ALL_SUBS:
         try:
             avgConsecFail = sum(failedList)/len(failedList)
             maxFailed     = max(failedList)
@@ -369,7 +414,7 @@ def same_student(sub1: submission, sub2: submission) -> bool:
     return (sub1.studentID == sub2.studentID)
 
 
-def main(studentsDir: str, allsubs: bool):
+def main(studentsDir: str):
     
     # check if arg is a path or folder in dir
     if is_path(studentsDir):
@@ -390,12 +435,12 @@ def main(studentsDir: str, allsubs: bool):
             print(f"'{studentsDir}' could not be unzipped.\n",e)
             quit() 
     
-    if allSubs: submissions = comp_all_subs(studentsDir)
-    else:       submissions = comp_final_subs(studentsDir)
+    if ALL_SUBS: submissions = comp_all_subs(studentsDir)
+    else:        submissions = comp_final_subs(studentsDir)
 
-    subs_to_sheet(studentsDir, allSubs, submissions)
+    subs_to_sheet(studentsDir, submissions)
 
-def proc_all(studentsDir: str):
+def proc_multi(studentsDir: str):
     """
     Compiles submissions from mulitple datasets and outputs to one excel sheet.
     - Assumes subdir passed is a directory with multiple datasets.
@@ -413,25 +458,28 @@ def proc_all(studentsDir: str):
 
         subs.append(submission(file, "", dataset=True))
         sets += 1
-        subs.extend(comp_all_subs(file))
+        if ALL_SUBS: subs.extend(comp_all_subs(file))
+        else:       subs.extend(comp_final_subs(file))
 
-    subs_to_sheet(studentsDir, allSubs, subs, numOfSets=sets)
+    subs_to_sheet(studentsDir, subs, numOfSets=sets)
 
 
 
 
+### Global Vars for arugments passed
+args       = get_args()
+SUB_DIR    = args.workingDir
+ALL_SUBS   = args.allSubs
+MUTISET    = args.multiSet
+ERROR_PROC = args.errorProc 
 
 
 ### call to main functions
 if __name__ == '__main__':
     start    = time()
-    args     = get_args()
-    subdir   = args.workingDir
-    allSubs  = args.allSubs
-    multi    = args.multiSet
     
-    if multi:   proc_all(subdir)
-    else:       main(subdir, allSubs)
+    if MUTISET:     proc_multi(SUB_DIR)
+    else:           main(SUB_DIR)
 
     
     
