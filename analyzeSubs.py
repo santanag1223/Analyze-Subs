@@ -3,7 +3,7 @@ import argparse
 from plistlib import InvalidFileException
 from shutil   import rmtree, copy
 from typing   import List
-from time     import time, strftime
+from time     import time
 from numpy    import average, nan
 from pandas   import DataFrame, concat
 from tqdm     import tqdm
