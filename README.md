@@ -4,7 +4,7 @@
 ## Description:
 Python Script that takes C++ assignment submissions in a zipfile and outputs an Excel spreadsheet to analyize data from submissions.
 
-See Subs_anonymized.zip for zipfile formatting.
+See example_submissions.zip for zipfile formatting.
 
 ## Arguments:
 The Script has **1 required argument** and **2 optional arguments** to be passed when running:
