@@ -1,6 +1,7 @@
 import os 
-import shutil
 import argparse
+from plistlib import InvalidFileException
+from shutil   import rmtree, copy
 from typing   import List
 from time     import time, strftime
 from numpy    import average, nan
@@ -14,72 +15,6 @@ from datetime import datetime
 #-#-#- Student and Submission Classes #-#-#
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
-class student:
-    """
-    student class acts like a container for each student's submissions and basic info about student
-
-    Each student holds:
-    - Student ID
-    - All of the student's submissions
-    - Compile Rate
-    - time between first and last submission (unzipping causes conflict)
-    - average time between submissions (unzipping causes conflict)
-    """
-
-    studentID = ""
-    compRate  = 1.00
-    subs      = list()
-    numOfSubs = 0
-    workTime  = ""
-    avgTime   = ""
-
-    def __init__(self, folder: str):
-        self.studentID = folder.split(" ")[1]
-        self.__get_subs(folder)
-        #self.__set_times()
-
-    def __get_subs(self, folder: str):
-        os.chdir(folder)        # enter student's directory
-
-        # if we want to compile all submissions, add all submissions to student's list
-        # we can also calculate the compile rate
-        if ALL_SUBS:
-            compiledSubs = 0
-            
-            for subZip in os.listdir():
-                currentSub = submission(subZip)
-                
-                if (currentSub.compiled): compiledSubs += 1
-
-                self.subs.append(currentSub)
-                self.numOfSubs += 1
-            
-            self.compRate = compiledSubs / self.numOfSubs
-
-        # otherwise, we update numOfSubs and only append the final submission to student's list
-        else:
-            self.numOfSubs = len(os.listdir())
-            self.subs.append(submission(os.listdir()[-1]))
-        
-        os.chdir("..")          # return to beginning directory
-
-    ### submissions times can't be accurately pulled from zip file
-    def __set_times(self):
-
-        # get list of all student submission times
-        subTimes = list()
-        for sub in self.subs: subTimes.append(sub.timeCreated) #; print (datetime.fromtimestamp(sub.timeCreated))
-
-        self.workTime = str((subTimes[0]))
-        self.avgTime  = str(average(subTimes))
-
-    def print_info(self):
-        print("Student", self.studentID, ":")
-        print("# of Subs:", self.numOfSubs)
-        print("Compile Percentage:", (self.compRate)*100, "%")
-        # print("Total Time Working:", self.workTime)
-        # print("Average time per submission:", self.avgTime)
-        print()
 
 
 class submission:
@@ -96,7 +31,7 @@ class submission:
 
     sub_folder  = ""
     subNum      = 0
-    timeCreated = 0.0
+    timeCreated = 0.000000000000
     compiled    = False
     error       = "Not Processed"
     errorLine   = ""
@@ -139,7 +74,7 @@ class submission:
 
         # exit the unzipped folder and delete it
         os.chdir("..")
-        try:   shutil.rmtree(temp)
+        try:   rmtree(temp)
         except PermissionError: pass
 
         # return if submissions compiled
@@ -187,7 +122,74 @@ class submission:
         except Exception:
             return "COULD NOT READ"
 
+class student:
+    """
+    student class acts like a container for each student's submissions and basic info about student
 
+    Each student holds:
+    - Student ID
+    - All of the student's submissions
+    - Compile Rate
+    - time between first and last submission (unzipping causes conflict)
+    - average time between submissions (unzipping causes conflict)
+    """
+
+    studentID = ""
+    compRate  = 1.00
+    subs      = list()
+    numOfSubs = 0
+    workTime  = None
+    avgTime   = None
+
+    def __init__(self, folder: str):
+        """student constructor expects a student directory from an unzipped data set"""
+        self.studentID = folder.split(" ")[1]
+        self.__get_subs(folder)
+        self.__set_times()
+
+    def __get_subs(self, folder: str):
+        os.chdir(folder)        # enter student's directory
+
+        # if we want to compile all submissions, add all submissions to student's list
+        # we can also calculate the compile rate
+        if ALL_SUBS:
+            compiledSubs = 0
+            for subZip in os.listdir():
+                currentSub = submission(subZip)
+                
+                if (currentSub.compiled): compiledSubs += 1
+
+                self.subs.append(currentSub)
+                self.numOfSubs += 1
+            
+            self.compRate = compiledSubs / self.numOfSubs
+
+        # otherwise, we update numOfSubs and only append the final submission to student's list
+        else:
+            self.numOfSubs = len(os.listdir())
+            self.subs.append(submission(os.listdir()[-1]))
+        
+        os.chdir("..")          # return to beginning directory
+
+    ### submissions times can't be accurately pulled from zip file
+    def __set_times(self):
+
+        # get list of all student submission times
+        subTimes = list()
+        for sub in self.subs:
+            print(sub.subNum) 
+            subTimes.append(sub.timeCreated)
+
+        self.workTime = datetime.fromtimestamp(subTimes[-1] - subTimes[0])
+        self.avgTime  = datetime.fromtimestamp(average(subTimes))
+
+    def print_info(self):
+        print("Student", self.studentID, ":")
+        print("# of Subs:", self.numOfSubs)
+        print("Compile Percentage:", (self.compRate)*100, "%")
+        print("Total Time Working:", self.workTime)
+        print("Average time per submission:", self.avgTime)
+        print()
 
 def get_args():
     """
@@ -209,6 +211,8 @@ def get_students(studentsDir: str) -> List[student]:
     os.chdir(studentsDir)
     for s in os.listdir():
         students.append(student(s))
+
+    os.chdir("..")
 
 
 ##########################################################
@@ -368,7 +372,7 @@ def unzip_from_path(zip_path: str) -> str:
     
     os.chdir('/')                                   # go to root dir
     print("copying file from path...")
-    shutil.copy(zip_path,start_dir)                 # copy zipfile to our current dir
+    copy(zip_path,start_dir)                        # copy zipfile to our current dir
     os.chdir(start_dir)                             # return to working dir
 
     zipFolder = os.path.basename(zip_path)          # get our zipfolder name from path
@@ -379,16 +383,19 @@ def unzip_from_path(zip_path: str) -> str:
 
     return zipFolder                                # return working unzip file
 
-def unzip_folder(zipFile: str) -> str:
+def unzip_folder(zipfile: str) -> str:
     """
     Unzips folder inside of current directory.
     
     returns new unzipped folder name
     """
 
-    nozip = zipFile.replace('.zip','')
-    shutil.unpack_archive(zipFile, nozip,'zip')
-    return nozip
+    if not zipfile.endswith(".zip"): raise InvalidFileException("ERROR: Non zipfile can not be unzipped.")
+
+    newfile = zipfile.replace('.zip','')
+    os.mkdir(newfile)
+    os.system("unzip -q " + zipfile + " -d " + newfile)
+    return newfile
 
 def error_search(keywords: List[str], errorLine: str) -> bool:
     """
@@ -435,7 +442,7 @@ def proc_single():
         except FileNotFoundError as e: 
             print(f"Directory '{WORKING_DIR}' could not be found.\n",e)
             quit()
-        except shutil.ReadError as e:
+        except InvalidFileException as e:
             print(f"'{WORKING_DIR}' could not be unzipped.\n",e)
             quit() 
 
@@ -445,7 +452,7 @@ def proc_single():
     
 def proc_multi():
     """
-    Compiles submissions from mulitple datasets and outputs to one excel sheet.
+    Compiles submissions from mulitple datasets and `outputs` to one excel sheet.
     - Assumes subdir passed is a directory with multiple datasets.
     - Compiles all submissions.
     """
@@ -460,13 +467,13 @@ def proc_multi():
     ##########################################################
 
 def debug():
-    print(WORKING_DIR)
     studentsDir = unzip_folder(WORKING_DIR)
-    
     os.chdir(studentsDir)
-
-    s = student(os.listdir()[0])
+    s = student(os.listdir()[5])
     s.print_info()
+    os.chdir("..")
+    rmtree(studentsDir)
+    
 
 
 
@@ -478,10 +485,9 @@ ALL_SUBS    = args.allSubs
 MUTISET     = args.multiSet
 
 
-
-##########################################################
-##              Call to '__main__' function             ##
-##########################################################
+#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+#-#-#-  Call to '__main__' function   #-#-#
+#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
 if __name__ == '__main__':
     start    = time()
@@ -492,4 +498,4 @@ if __name__ == '__main__':
 
     end     = time()
     run     = end - start
-    print(f"Total runtime - {int(run/60)}:{int(run % 60)}")
+    print("Total runtime - " + "{:4d}".format(int(run/60)) + " minutes and " + "{:02.2f}".format(run%60) + " seconds.")
