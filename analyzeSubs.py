@@ -7,15 +7,12 @@ from time     import time
 from numpy    import average, nan
 from pandas   import DataFrame, concat
 from tqdm     import tqdm
-from datetime import datetime
 
 
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-#-#-#- Student and Submission Classes #-#-#
+#-#-#- submission and student Classes #-#-#
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-
-
 
 class submission:
     """
@@ -136,10 +133,11 @@ class student:
 
     studentID = ""
     compRate  = 1.00
-    subs      = list()
     numOfSubs = 0
-    workTime  = None
-    avgTime   = None
+    workTime  = 0.0
+    avgTime   = 0.0
+    subs      = list()
+
 
     def __init__(self, folder: str):
         """student constructor expects a student directory from an unzipped data set"""
@@ -148,47 +146,68 @@ class student:
         self.__set_times()
 
     def __get_subs(self, folder: str):
-        os.chdir(folder)        # enter student's directory
 
-        # if we want to compile all submissions, add all submissions to student's list
-        # we can also calculate the compile rate
+        # enter student's directory
+        os.chdir(folder)
+
+        # make sure file system is sorted
+        subZips = os.listdir()
+        subZips.sort()
+
+        self.numOfSubs = len(subZips)
+        compiledSubs   = 0
+
+
+        # if we are compiling all submissions, calculate compile rate
         if ALL_SUBS:
-            compiledSubs = 0
-            for subZip in os.listdir():
+            for subZip in tqdm(subZips, desc = "Submissions Processed", unit = "Submission"):
+                if not subZip.endswith(".zip"): continue
                 currentSub = submission(subZip)
-                
-                if (currentSub.compiled): compiledSubs += 1
 
+                # count compiled submissions
+                if currentSub.compiled: compiledSubs += 1
+
+                # add to student's submissions
                 self.subs.append(currentSub)
-                self.numOfSubs += 1
-            
+                            
             self.compRate = compiledSubs / self.numOfSubs
 
-        # otherwise, we update numOfSubs and only append the final submission to student's list
+        # otherwise, we only append the final submission to student's list
         else:
-            self.numOfSubs = len(os.listdir())
-            self.subs.append(submission(os.listdir()[-1]))
-        
-        os.chdir("..")          # return to beginning directory
+            currentSub = submission(subZips[-1])
+            self.subs.append(currentSub)
 
-    ### submissions times can't be accurately pulled from zip file
+            # calculate compile rate out of 1
+            if currentSub.compiled: self.compRate = 1   
+            else:                   self.compRate = 0
+
+        # return to beginning directory
+        os.chdir("..")
+
     def __set_times(self):
 
-        # get list of all student submission times
-        subTimes = list()
-        for sub in self.subs:
-            print(sub.subNum) 
-            subTimes.append(sub.timeCreated)
+        if ALL_SUBS:
+            self.workTime = self.subs[-1].timeCreated - self.subs[0].timeCreated
 
-        self.workTime = datetime.fromtimestamp(subTimes[-1] - subTimes[0])
-        self.avgTime  = datetime.fromtimestamp(average(subTimes))
+        # calculate average submission time
+        times    = list()
+        lastTime = None
+        for sub in self.subs:
+            if lastTime == None:
+                lastTime = sub.timeCreated
+            else:
+                times.append(abs(lastTime - sub.timeCreated))
+                lastTime = sub.timeCreated
+
+        self.avgTime  = (average(times))
 
     def print_info(self):
+
         print("Student", self.studentID, ":")
         print("# of Subs:", self.numOfSubs)
-        print("Compile Percentage:", (self.compRate)*100, "%")
-        print("Total Time Working:", self.workTime)
-        print("Average time per submission:", self.avgTime)
+        print("Compile Percentage: {:02.2f}".format(self.compRate * 100) + " %")
+        print("Total Time Working:\t", epoch_to_date(self.workTime))
+        print("Avg time per submission:", epoch_to_date(self.avgTime))
         print()
 
 def get_args():
@@ -197,10 +216,10 @@ def get_args():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("workingDir"          , help = "zipped submissions file in current directory or full path to file", type = str)
-    parser.add_argument('-a', "--allSubs"     , help = "compile all submissions"        , action = "store_true")
-    parser.add_argument('-m', '--multiSet'    , help = "Folder to multiple sets"        , action = "store_true")
-    parser.add_argument('-e', "--errorProc"   , help = "Processes submission errors"    , action = "store_true")
+    parser.add_argument("workingDir"        , help = "zipped submissions file in current directory or full path to file", type = str)
+    parser.add_argument("-a", "--allSubs"   , help = "compile all submissions"     , action = "store_true")
+    parser.add_argument("-m", "--multiSet"  , help = "Folder to multiple sets"     , action = "store_true")
+    parser.add_argument("-e", "--errorProc" , help = "Processes submission errors" , action = "store_true")
     args   = parser.parse_args()
     return args
 
@@ -209,15 +228,19 @@ def get_students(studentsDir: str) -> List[student]:
     students = list()
     
     os.chdir(studentsDir)
-    for s in os.listdir():
+    for s in tqdm(os.listdir(), desc = "Students Processed", unit = "Student"):
+        if not s.startswith("Student"): continue
         students.append(student(s))
 
     os.chdir("..")
+
+    return students
 
 
 ##########################################################
 ##  UPDATE Student lists and Student_to_Sheet Function  ##
 ##########################################################
+
 def subs_to_sheet(subDir: str, submissions: List[submission], numOfSets: int = 0):
     """
     Takes the submission.zip filename and the processed submissions and creates excel spreadsheet with all submissions data.
@@ -371,12 +394,10 @@ def unzip_from_path(zip_path: str) -> str:
     start_dir = os.getcwd()
     
     os.chdir('/')                                   # go to root dir
-    print("copying file from path...")
     copy(zip_path,start_dir)                        # copy zipfile to our current dir
     os.chdir(start_dir)                             # return to working dir
 
     zipFolder = os.path.basename(zip_path)          # get our zipfolder name from path
-    print("unzipping file...")
     zipFolder = unzip_folder(zipFolder)             # unzip folder and rename our zipFolder
 
     os.remove(zipFolder + '.zip')                   # delete the copied over zip
@@ -419,6 +440,47 @@ def same_student(sub1: submission, sub2: submission) -> bool:
     """
     return (sub1.studentID == sub2.studentID)
 
+def epoch_to_date(epoch: float) -> str:
+    """
+    Takes a epoch time in seconds and returns a string with the epoch amount in days, hours, minutes, and seconds.
+    """
+    days  =  int(epoch / (60*60*24))
+    epoch -= days * (60*60*24)
+    hours =  int(epoch / (60*60))
+    epoch -= hours * (60*60)
+    mins  =  int(epoch / 60)
+    epoch -= mins * (60)
+    secs  =  epoch
+
+    return "{:1d} days {:2d} hrs {:2d} mins {:02.2f} secs".format(days, hours, mins, secs)
+
+def print_avg_student_info(students: List[student]) -> None:
+    """
+    Takes a list of students and prints information about the students
+    """
+
+    workTimes = list()
+    subTimes  = list()
+    compRates = list()
+    numOfSubs = list()
+    for s in students:
+        workTimes.append(s.workTime)
+        subTimes.append(s.avgTime)
+        compRates.append(s.compRate)
+        numOfSubs.append(s.numOfSubs)
+
+    print()
+    print(CITALIC + "For students in " + CYELLOW + "\"" + WORKING_DIR + "\" " + CEND + ":\n")
+
+    print("Toral Number of Students:\t"    + CWHITEBG + CBLACK + str(len(students))  + CEND)
+    print("Total Number of Submissions:\t" + CWHITEBG + CBLACK + str(sum(numOfSubs)) + CEND + "\n")
+
+    print(CBOLD + "Average total worktime:\t\t\t"          + CEND, epoch_to_date(average(workTimes)))
+    print(CBOLD + "Average time per Submissions:\t\t"      + CEND, epoch_to_date(average(subTimes)))
+    print(CBOLD + "Average Compilation Rate:\t\t"          + CEND, "{:02.2f}".format(average(compRates) * 100) + " %")
+    print(CBOLD + "Average # of submission per student:\t" + CEND, "{:02.2f}".format(average(numOfSubs)) + CEND)
+    print()
+
 
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -427,24 +489,30 @@ def same_student(sub1: submission, sub2: submission) -> bool:
 
 def proc_single():
     
-    # check if arg is a path or folder in dir
     if is_path(WORKING_DIR):
-        # try to unzip file to folder in dir
-        try:                
-            studentsDir = unzip_from_path(WORKING_DIR)
+    # working directory is a path
+        try:
+            unzippedDir = unzip_from_path(WORKING_DIR)
         except FileNotFoundError as e:
-            print(f"Directory '{studentsDir}' could not be found.\n",e)
+            print(f"Directory '{WORKING_DIR}' could not be found.\n" + e)
             quit()
     else:
+    # working directory not a path
         try:
-            print("unzipping file...")
-            studentsDir = unzip_folder(WORKING_DIR)
-        except FileNotFoundError as e: 
-            print(f"Directory '{WORKING_DIR}' could not be found.\n",e)
+            unzippedDir = unzip_folder(WORKING_DIR)
+        except FileNotFoundError as e:
+            print(f"Directory '{WORKING_DIR}' could not be found.\n" + e)
             quit()
         except InvalidFileException as e:
-            print(f"'{WORKING_DIR}' could not be unzipped.\n",e)
-            quit() 
+            print(f"'{WORKING_DIR}' could not be unzipped.\n" + e)
+            quit()
+
+    students = get_students(unzippedDir)
+
+    print_avg_student_info(students)
+
+    rmtree(unzippedDir)    
+
 
     ##########################################################
     ##  UPDATE Student lists and Student_to_Sheet Function  ##
@@ -469,11 +537,14 @@ def proc_multi():
 def debug():
     studentsDir = unzip_folder(WORKING_DIR)
     os.chdir(studentsDir)
-    s = student(os.listdir()[5])
-    s.print_info()
+
+    s = student(os.listdir()[2])
+    ss = list()
+    ss.append(s)
+    print_avg_student_info(ss)
+
     os.chdir("..")
-    rmtree(studentsDir)
-    
+    rmtree(studentsDir)    
 
 
 
@@ -484,6 +555,14 @@ ERROR_PROC  = args.errorProc
 ALL_SUBS    = args.allSubs
 MUTISET     = args.multiSet
 
+#-#-#- Global Variables for text formatting -#-#-#
+CEND    = '\33[0m'
+CITALIC = '\33[3m'
+CBLACK  = '\33[30m'
+CYELLOW = '\33[33m'
+CWHITE  = '\33[37m'
+CBOLD   = '\33[1m'
+CWHITEBG  = '\33[47m'
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 #-#-#-  Call to '__main__' function   #-#-#
@@ -492,10 +571,10 @@ MUTISET     = args.multiSet
 if __name__ == '__main__':
     start    = time()
     
-    # if MUTISET:     proc_multi(WORKING_DIR)
-    # else:           proc_single(WORKING_DIR)
+    # if MUTISET:     proc_multi()
+    # else:           proc_single()
     debug()
 
     end     = time()
     run     = end - start
-    print("Total runtime - " + "{:4d}".format(int(run/60)) + " minutes and " + "{:02.2f}".format(run%60) + " seconds.")
+    print("Total runtime - " + "{:1d}".format(int(run/60)) + " minutes and " + "{:02.2f}".format(run%60) + " seconds.")

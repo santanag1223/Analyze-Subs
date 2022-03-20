@@ -1,2 +1,5 @@
-Demo*
+# Ignore DS_Store file from MacOS 
 .DS_Store
+
+# Ignore demo sets:
+demo*
