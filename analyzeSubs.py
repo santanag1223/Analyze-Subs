@@ -220,6 +220,7 @@ def get_args():
     parser.add_argument("-a", "--allSubs"   , help = "compile all submissions"     , action = "store_true")
     parser.add_argument("-m", "--multiSet"  , help = "Folder to multiple sets"     , action = "store_true")
     parser.add_argument("-e", "--errorProc" , help = "Processes submission errors" , action = "store_true")
+    parser.add_argument("-d", "--debugging" , help = "Run the debugging function"  , action = "store_true")
     args   = parser.parse_args()
     return args
 
@@ -384,7 +385,7 @@ def is_path(dir: str) -> bool:
     if '/' in dir:  return True
     else:           return False
 
-def unzip_from_path(zip_path: str) -> str:
+def unzip_from_path(path: str) -> str:
     """
     Copies '.zip' from another directory into current directory and unzips locally.\n
     deletes the '.zip' folder copied over after unzipping it
@@ -394,10 +395,10 @@ def unzip_from_path(zip_path: str) -> str:
     start_dir = os.getcwd()
     
     os.chdir('/')                                   # go to root dir
-    copy(zip_path,start_dir)                        # copy zipfile to our current dir
+    copy(path,start_dir)                            # copy zipfile to our current dir
     os.chdir(start_dir)                             # return to working dir
 
-    zipFolder = os.path.basename(zip_path)          # get our zipfolder name from path
+    zipFolder = os.path.basename(path)              # get our zipfolder name from path
     zipFolder = unzip_folder(zipFolder)             # unzip folder and rename our zipFolder
 
     os.remove(zipFolder + '.zip')                   # delete the copied over zip
@@ -417,6 +418,29 @@ def unzip_folder(zipfile: str) -> str:
     os.mkdir(newfile)
     os.system("unzip -q " + zipfile + " -d " + newfile)
     return newfile
+
+def unzip_submissions(subZip: str) -> str:
+    """
+    Determines how to unzip submission zip
+    
+    returns the new unzipped folder name
+    """
+    if is_path(subZip):
+    # working directory is a path
+        try:
+            unzippedDir = unzip_from_path(subZip)
+        except Exception as e:
+            print(e)
+            quit()
+    else:
+    # working directory not a path
+        try:
+            unzippedDir = unzip_folder(subZip)
+        except Exception as e:
+            print(e)
+            quit()
+    
+    return unzippedDir
 
 def error_search(keywords: List[str], errorLine: str) -> bool:
     """
@@ -452,7 +476,7 @@ def epoch_to_date(epoch: float) -> str:
     epoch -= mins * (60)
     secs  =  epoch
 
-    return "{:1d} days {:2d} hrs {:2d} mins {:02.2f} secs".format(days, hours, mins, secs)
+    return "{:1d} days {:2d} hrs {:2d} mins {:5.2f} secs".format(days, hours, mins, secs)
 
 def print_avg_student_info(students: List[student]) -> None:
     """
@@ -470,15 +494,15 @@ def print_avg_student_info(students: List[student]) -> None:
         numOfSubs.append(s.numOfSubs)
 
     print()
-    print(CITALIC + "For students in " + CYELLOW + "\"" + WORKING_DIR + "\" " + CEND + ":\n")
+    print(CITALIC + "For students in " + CYELLOW + "\"" + os.path.basename(WORKING_DIR) + "\" " + CEND + ":\n")
 
-    print("Toral Number of Students:\t"    + CWHITEBG + CBLACK + str(len(students))  + CEND)
-    print("Total Number of Submissions:\t" + CWHITEBG + CBLACK + str(sum(numOfSubs)) + CEND + "\n")
+    print("Toral Number of Students:\t"    + CWHITEBG + CBLACK + "{:3d}".format(len(students))  + CEND)
+    print("Total Number of Submissions:\t" + CWHITEBG + CBLACK + "{:3d}".format(sum(numOfSubs)) + CEND + "\n")
 
     print(CBOLD + "Average total worktime:\t\t\t"          + CEND, epoch_to_date(average(workTimes)))
     print(CBOLD + "Average time per Submissions:\t\t"      + CEND, epoch_to_date(average(subTimes)))
-    print(CBOLD + "Average Compilation Rate:\t\t"          + CEND, "{:02.2f}".format(average(compRates) * 100) + " %")
-    print(CBOLD + "Average # of submission per student:\t" + CEND, "{:02.2f}".format(average(numOfSubs)) + CEND)
+    print(CBOLD + "Average Compilation Rate:\t\t"          + CEND, "{:5.2f}".format(average(compRates) * 100) + " %")
+    print(CBOLD + "Average # of submission per student:\t" + CEND, "{:5.2f}".format(average(numOfSubs)) + CEND)
     print()
 
 
@@ -489,23 +513,7 @@ def print_avg_student_info(students: List[student]) -> None:
 
 def proc_single():
     
-    if is_path(WORKING_DIR):
-    # working directory is a path
-        try:
-            unzippedDir = unzip_from_path(WORKING_DIR)
-        except FileNotFoundError as e:
-            print(f"Directory '{WORKING_DIR}' could not be found.\n" + e)
-            quit()
-    else:
-    # working directory not a path
-        try:
-            unzippedDir = unzip_folder(WORKING_DIR)
-        except FileNotFoundError as e:
-            print(f"Directory '{WORKING_DIR}' could not be found.\n" + e)
-            quit()
-        except InvalidFileException as e:
-            print(f"'{WORKING_DIR}' could not be unzipped.\n" + e)
-            quit()
+    unzippedDir = unzip_submissions(WORKING_DIR)
 
     students = get_students(unzippedDir)
 
@@ -535,8 +543,9 @@ def proc_multi():
     ##########################################################
 
 def debug():
-    studentsDir = unzip_folder(WORKING_DIR)
-    os.chdir(studentsDir)
+
+    unzippedDir = unzip_submissions(WORKING_DIR)
+    os.chdir(unzippedDir)
 
     s = student(os.listdir()[2])
     ss = list()
@@ -544,7 +553,7 @@ def debug():
     print_avg_student_info(ss)
 
     os.chdir("..")
-    rmtree(studentsDir)    
+    rmtree(unzippedDir)    
 
 
 
@@ -554,14 +563,15 @@ WORKING_DIR = args.workingDir
 ERROR_PROC  = args.errorProc 
 ALL_SUBS    = args.allSubs
 MUTISET     = args.multiSet
+DEBUGGING   = args.debugging
 
 #-#-#- Global Variables for text formatting -#-#-#
-CEND    = '\33[0m'
-CITALIC = '\33[3m'
-CBLACK  = '\33[30m'
-CYELLOW = '\33[33m'
-CWHITE  = '\33[37m'
-CBOLD   = '\33[1m'
+CEND      = '\33[0m'
+CITALIC   = '\33[3m'
+CBLACK    = '\33[30m'
+CYELLOW   = '\33[33m'
+CWHITE    = '\33[37m'
+CBOLD     = '\33[1m'
 CWHITEBG  = '\33[47m'
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -570,11 +580,11 @@ CWHITEBG  = '\33[47m'
 
 if __name__ == '__main__':
     start    = time()
-    
-    if MUTISET:     proc_multi()
-    else:           proc_single()
-    #debug()
+
+    if   DEBUGGING:   debug()
+    elif MUTISET:     proc_multi()
+    else:             proc_single()
 
     end     = time()
     run     = end - start
-    print("Total runtime - " + "{:1d}".format(int(run/60)) + " minutes and " + "{:02.2f}".format(run%60) + " seconds.")
+    print("Total runtime - " + "{:1d}".format(int(run/60)) + " minutes and " + "{:5.2f}".format(run%60) + " seconds.")
