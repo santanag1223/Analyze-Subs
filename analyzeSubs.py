@@ -571,9 +571,9 @@ CWHITEBG  = '\33[47m'
 if __name__ == '__main__':
     start    = time()
     
-    # if MUTISET:     proc_multi()
-    # else:           proc_single()
-    debug()
+    if MUTISET:     proc_multi()
+    else:           proc_single()
+    #debug()
 
     end     = time()
     run     = end - start
