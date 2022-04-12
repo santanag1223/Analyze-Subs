@@ -1,5 +1,6 @@
 import os 
 import argparse
+from pickle import FALSE
 from plistlib import InvalidFileException
 from shutil   import rmtree, copy
 from typing   import List
@@ -15,11 +16,12 @@ def get_args():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("workingDir"        , help = "zipped submissions file in current directory or full path to file", type = str)
-    parser.add_argument("-a", "--allSubs"   , help = "compile all submissions"     , action = "store_true")
-    parser.add_argument("-m", "--multiSet"  , help = "Folder to multiple sets"     , action = "store_true")
-    parser.add_argument("-e", "--errorProc" , help = "Processes submission errors" , action = "store_true")
-    parser.add_argument("-d", "--debugging" , help = "Run the debugging function"  , action = "store_true")
+    parser.add_argument("workingDir"            , help = "zipped submissions file in current directory or full path to file", type = str)
+    parser.add_argument("-a", "--allSubs"       , help = "compile all submissions"     , action = "store_true")
+    parser.add_argument("-f", "--fromArchive"   , help = "Read submissions from excel" , action = "store_true")
+    parser.add_argument("-m", "--multiSet"      , help = "Folder to multiple sets"     , action = "store_true")
+    parser.add_argument("-e", "--errorProc"     , help = "Processes submission errors" , action = "store_true")
+    parser.add_argument("-d", "--debugging"     , help = "Run the debugging function"  , action = "store_true")
     args   = parser.parse_args()
 
     return args
@@ -31,6 +33,7 @@ ERROR_PROC  = args.errorProc
 ALL_SUBS    = args.allSubs
 MUTISET     = args.multiSet
 DEBUGGING   = args.debugging
+FROM_ARCH   = args.fromArchive
 
 #-#-#- Global Variables for text formatting -#-#-#
 CEND      = '\33[0m'
@@ -240,12 +243,13 @@ class student:
     def to_DataFrame(self):
 
         df = DataFrame({
-            f"Student {self.studentID}" : [f"Submission {i + 1}" for i in range(len(self.subs))],
-            "Compiled"                  : [sub.compiled for sub in self.subs]
+            "Student ID"            : [self.studentID],
+            "Compile Rate"          : [self.compRate],
+            "Average Time per Sub"  : [epoch_to_date(self.avgTime)],
+            "Total Work Time"       : [epoch_to_date(self.workTime)],
         })
 
-        print(df)
-        df.to_csv(index=False)
+        return df
 
     def print_info(self):
 
@@ -460,7 +464,7 @@ def subs_failed(sub1: submission, sub2: submission) -> bool:
 
 def epoch_to_date(epoch: float) -> str:
     """
-    Takes a epoch time in seconds and returns a string with the epoch amount in days, hours, minutes, and seconds.
+    Takes a epoch time (in seconds) and returns a string with the epoch amount in days, hours, minutes, and seconds.
     """
     days  =  int(epoch / (60*60*24))
     epoch -= days * (60*60*24)
@@ -470,9 +474,12 @@ def epoch_to_date(epoch: float) -> str:
     epoch -= mins * (60)
     secs  =  epoch
 
-    return "{:1d} days {:2d} hrs {:2d} mins {:5.2f} secs".format(days, hours, mins, secs)
+    if days == 0:
+        return "{:02d}:{:02d}:{:5.2f}".format(hours, mins, secs)
 
-def print_avg_student_info(students: List[student]) -> None:
+    return "{:1d}:{:02d}:{:02d}:{:5.2f}".format(days, hours, mins, secs)
+
+def print_students_info(students: List[student]) -> None:
     """
     Takes a list of students and prints information about the students
     """
@@ -511,7 +518,7 @@ def proc_single():
 
     students = get_students(unzippedDir)
 
-    print_avg_student_info(students)
+    print_students_info(students)
 
     rmtree(unzippedDir)    
 
@@ -541,11 +548,15 @@ def debug():
     unzippedDir = unzip_submissions(WORKING_DIR)
     os.chdir(unzippedDir)
 
-    s = student(os.listdir()[2])
-    s.to_DataFrame()
-    ss = list()
-    ss.append(s)
-    #print_avg_student_info(ss)
+    dfs = list()
+    s1  = student(os.listdir()[0])
+    s2  = student(os.listdir()[2])
+    dfs.append(s1.to_DataFrame())
+    dfs.append(s2.to_DataFrame())
+
+    df = concat(dfs, axis = 0)
+    print(df)
+    df.to_excel("Archive.xlsx", sheet_name = "Submission Analysis", index = False)
 
     os.chdir("..")
     rmtree(unzippedDir)    
