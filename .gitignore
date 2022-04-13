@@ -3,3 +3,6 @@
 
 # Ignore demo sets:
 demo*
+
+# Ignore Excel files created:
+*.xlsx
