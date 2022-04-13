@@ -244,6 +244,7 @@ class student:
 
         df = DataFrame({
             "Student ID"            : [self.studentID],
+            "Number of Submissions" : [self.numOfSubs],
             "Compile Rate"          : [self.compRate],
             "Average Time per Sub"  : [epoch_to_date(self.avgTime)],
             "Total Work Time"       : [epoch_to_date(self.workTime)],
@@ -260,20 +261,6 @@ class student:
         print("Avg time per submission:", epoch_to_date(self.avgTime))
         print()
 
-def get_args():
-    """
-    Parses command line and returns parser object.
-    """
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("workingDir"        , help = "zipped submissions file in current directory or full path to file", type = str)
-    parser.add_argument("-a", "--allSubs"   , help = "compile all submissions"     , action = "store_true")
-    parser.add_argument("-m", "--multiSet"  , help = "Folder to multiple sets"     , action = "store_true")
-    parser.add_argument("-e", "--errorProc" , help = "Processes submission errors" , action = "store_true")
-    parser.add_argument("-d", "--debugging" , help = "Run the debugging function"  , action = "store_true")
-    args   = parser.parse_args()
-    return args
-
 def get_students(studentsDir: str) -> List[student]:
     
     students = list()
@@ -284,6 +271,7 @@ def get_students(studentsDir: str) -> List[student]:
         students.append(student(s))
 
     os.chdir("..")
+    rmtree(studentsDir)
 
     return students
 
@@ -474,12 +462,9 @@ def epoch_to_date(epoch: float) -> str:
     epoch -= mins * (60)
     secs  =  epoch
 
-    if days == 0:
-        return "{:02d}:{:02d}:{:5.2f}".format(hours, mins, secs)
+    return "{:02d}:{:02d}:{:02d}:{:05.2f}".format(days, hours, mins, secs)
 
-    return "{:1d}:{:02d}:{:02d}:{:5.2f}".format(days, hours, mins, secs)
-
-def print_students_info(students: List[student]) -> None:
+def print_students_info(students: List[student], dir: str) -> None:
     """
     Takes a list of students and prints information about the students
     """
@@ -495,7 +480,7 @@ def print_students_info(students: List[student]) -> None:
         numOfSubs.append(s.numOfSubs)
 
     print()
-    print(CITALIC + "For students in " + CYELLOW + "\"" + os.path.basename(WORKING_DIR) + "\" " + CEND + ":\n")
+    print(CITALIC + "For students in " + CYELLOW + "\"" + dir + "\" " + CEND + ":\n")
 
     print("Toral Number of Students:\t"    + CWHITEBG + CBLACK + "{:3d}".format(len(students))  + CEND)
     print("Total Number of Submissions:\t" + CWHITEBG + CBLACK + "{:3d}".format(sum(numOfSubs)) + CEND + "\n")
@@ -512,20 +497,17 @@ def print_students_info(students: List[student]) -> None:
 #-#-#- Main Functions of the Script  -#-#-#
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
-def proc_single():
+def proc_single(workingDir: str):
     
-    unzippedDir = unzip_submissions(WORKING_DIR)
+    unzippedDir = unzip_submissions(workingDir)
 
     students = get_students(unzippedDir)
 
-    print_students_info(students)
+    print_students_info(students, unzippedDir)
 
-    rmtree(unzippedDir)    
-
-
-    ##########################################################
-    ##  UPDATE Student lists and Student_to_Sheet Function  ##
-    ##########################################################
+    dfs = [s.to_DataFrame() for s in students]
+    df  = concat(dfs, axis=0)
+    df.to_excel(f"{unzippedDir} Output.xlsx", sheet_name = "Submission Analysis", index = False)
     
 def proc_multi():
     """
@@ -533,16 +515,11 @@ def proc_multi():
     - Assumes subdir passed is a directory with multiple datasets.
     - Compiles all submissions.
     """
-
-    subs        = list()
-
+    
     os.chdir(WORKING_DIR)
-    sets = 0
-
-    ##########################################################
-    ##  UPDATE Student lists and Student_to_Sheet Function  ##
-    ##########################################################
-
+    for dataset in os.listdir():
+        proc_single(dataset)
+    
 def debug():
 
     unzippedDir = unzip_submissions(WORKING_DIR)
@@ -572,7 +549,7 @@ if __name__ == '__main__':
 
     if   DEBUGGING:   debug()
     elif MUTISET:     proc_multi()
-    else:             proc_single()
+    else:             proc_single(WORKING_DIR)
 
     end     = time()
     run     = end - start
