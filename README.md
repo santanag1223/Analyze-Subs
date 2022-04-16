@@ -2,7 +2,7 @@
 # Analyze Submissions `analyzeSubs.py`
 
 ## Description:
-Python Script that takes C++ assignment submissions in a zipfile and outputs an Excel spreadsheet to analyize data from submissions.
+Python Script that takes C++ assignment submissions in a zipfile and outputs an Excel spreadsheet to analyze data from submissions.
 
 See example_submissions.zip for zipfile formatting.
 
