@@ -1,6 +1,6 @@
 import os 
 import argparse
-from pickle import FALSE
+from pkgutil import extend_path
 from plistlib import InvalidFileException
 from shutil   import rmtree, copy
 from typing   import List
@@ -8,6 +8,7 @@ from time     import time
 from numpy    import average, nan
 from pandas   import DataFrame, concat
 from tqdm     import tqdm
+from concurrent.futures import ProcessPoolExecutor
 
 #-#-#- Command Line Parsing -#-#-#
 def get_args():
@@ -74,9 +75,9 @@ class submission:
         self.sub_folder  = folder
         nozip            = folder.replace(".zip","")
         self.subNum      = int(nozip.split("_")[1])
-        self.compiled    = self.__try_compile()
+        self.__try_compile()
 
-    def __try_compile(self)-> bool:
+    def __try_compile(self):
         """
         Attempts compilation of submission.\n
         returns True if 'a.out' is created after compilation.\n
@@ -97,22 +98,19 @@ class submission:
         self.timeCreated = os.path.getmtime(os.listdir()[0])
 
         # call compilation and check for 'a.out'
-        os.system("g++ -std=c++17 *.cpp -w 2>err.txt -O0")
+        os.system("g++ -std=c++17 *.cpp -w 2>err.txt")
 
         if "a.out" in os.listdir(): 
-            compiled    = True
+            self.compiled    = True
             if (ERROR_PROC): self.error  = "No Error"
         else:
-            compiled    = False
+            self.compiled    = False
             if (ERROR_PROC): self.error  = self.__get_error()
 
         # exit the unzipped folder and delete it
         os.chdir("..")
         try:   rmtree(temp)
         except PermissionError: pass
-
-        # return if submissions compiled
-        return compiled
 
     def __get_error(self) -> str:
         """
@@ -181,38 +179,36 @@ class student:
         """student constructor expects a student directory from an unzipped data set"""
         self.studentID = folder.split(" ")[1]
         self.__get_subs(folder)
-        self.__set_times()
+        if ALL_SUBS: self.__set_times()
 
     def __get_subs(self, folder: str):
 
         # enter student's directory
         os.chdir(folder)
 
-        # make sure file system is sorted
-        subZips = os.listdir()
-        subZips.sort()
+        # make sure file system is sorted and is only Submission zips
+        subzips = list()
+        for file in os.listdir():
+            if file.startswith("Submission"): subzips.append(file)
+        subzips.sort()
 
-        self.numOfSubs = len(subZips)
+        self.numOfSubs = len(subzips)
         compiledSubs   = 0
 
-
-        # if we are compiling all submissions, calculate compile rate
         if ALL_SUBS:
-            for subZip in tqdm(subZips, desc = "Submissions Processed", unit = "Submission"):
-                if not subZip.endswith(".zip"): continue
-                currentSub = submission(subZip)
+            # use multiprocessing to compile submissions
+            with ProcessPoolExecutor() as exe:
+                subs = exe.map(submission, subzips) # subs is a generator fo all of our submission objects
+                self.subs = [_ for _ in subs]       # extract the subs in order using list comprehension
 
-                # count compiled submissions
-                if currentSub.compiled: compiledSubs += 1
-
-                # add to student's submissions
-                self.subs.append(currentSub)
-                            
+            # calculate compilation rate for student
+            for sub in self.subs:
+                if sub.compiled: compiledSubs += 1
             self.compRate = compiledSubs / self.numOfSubs
 
-        # otherwise, we only append the final submission to student's list
         else:
-            currentSub = submission(subZips[-1])
+            # if only processing final subs
+            currentSub = submission(subzips[-1])
             self.subs.append(currentSub)
 
             # calculate compile rate out of 1
@@ -224,21 +220,19 @@ class student:
 
     def __set_times(self):
 
-        if ALL_SUBS:
-            # calculate total work time
-            self.workTime = self.subs[-1].timeCreated - self.subs[0].timeCreated
+        times     = list() # list of times to average
+        firstTime = None   # first submission time
+        lastTime  = None   # submission time of last submission
+        for sub in self.subs:
+            if lastTime == None:
+                firstTime = sub.timeCreated
+                lastTime  = sub.timeCreated
+            else:
+                times.append(abs(lastTime - sub.timeCreated))
+                lastTime = sub.timeCreated
 
-            # calculate average submission time
-            times    = list()
-            lastTime = None
-            for sub in self.subs:
-                if lastTime == None:
-                    lastTime = sub.timeCreated
-                else:
-                    times.append(abs(lastTime - sub.timeCreated))
-                    lastTime = sub.timeCreated
-
-            self.avgTime  = (average(times))
+        self.avgTime  = (average(times))
+        self.workTime = lastTime - firstTime
 
     def to_DataFrame(self):
 
@@ -366,10 +360,7 @@ def get_students(studentsDir: str) -> List[student]:
 
 
 
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 #-#-#-        Helper Functions       -#-#-#
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-
 def is_path(dir: str) -> bool:
     """
     Checks if string is a path to a directory, returns True if '/' is present in the string.
@@ -493,10 +484,8 @@ def print_students_info(students: List[student], dir: str) -> None:
 
 
 
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-#-#-#- Main Functions of the Script  -#-#-#
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
+#-#-#- Main Functions of the Script  -#-#-#
 def proc_single(workingDir: str):
     
     unzippedDir = unzip_submissions(workingDir)
@@ -540,10 +529,7 @@ def debug():
 
 
 
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 #-#-#-  Call to '__main__' function   #-#-#
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-
 if __name__ == '__main__':
     start    = time()
 
