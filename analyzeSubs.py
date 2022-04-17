@@ -207,7 +207,6 @@ class student:
             self.compRate = compiledSubs / self.numOfSubs
 
         else:
-            # if only processing final subs
             currentSub = submission(subzips[-1])
             self.subs.append(currentSub)
 
@@ -230,9 +229,15 @@ class student:
             else:
                 times.append(abs(lastTime - sub.timeCreated))
                 lastTime = sub.timeCreated
-
-        self.avgTime  = (average(times))
-        self.workTime = lastTime - firstTime
+        
+        # account for people with only one submission
+        if firstTime == lastTime:
+            self.avgTime  = 0
+            self.workTime = 0
+        # otherwise, we calculate submission times
+        else :
+            self.avgTime  = (average(times))
+            self.workTime = lastTime - firstTime
 
     def to_DataFrame(self):
 
@@ -256,11 +261,22 @@ class student:
         print()
 
 def get_students(studentsDir: str) -> List[student]:
+    """
+    Takes a folder name in current directory containing student directories
+    deletes input directory after creating all students
     
+    returns a list of student objects, each containing their own submissions
+
+    """
     students = list()
     
     os.chdir(studentsDir)
-    for s in tqdm(os.listdir(), desc = "Students Processed", unit = "Student"):
+
+    # sorting student directories so excel output is in correct order
+    studentDirs = os.listdir()
+    studentDirs.sort()
+
+    for s in tqdm(studentDirs, desc = "Students", unit = "Student"):
         if not s.startswith("Student"): continue
         students.append(student(s))
 
@@ -268,95 +284,6 @@ def get_students(studentsDir: str) -> List[student]:
     rmtree(studentsDir)
 
     return students
-
-
-##########################################################
-##  UPDATE Student lists and Student_to_Sheet Function  ##
-##########################################################
-
-# def subs_to_sheet(subDir: str, students: List[student], numOfSets: int = 0):
-#     """
-#     Takes the submission.zip filename and the processed submissions and creates excel spreadsheet with all submissions data.
-#     """
-
-#     errCounts = {
-#         "Syntax Error"          : 0, 
-#         "Type Error"            : 0,
-#         "Scope Error"           : 0,
-#         "Conversion Error"      : 0,
-#         "NoModuleFound"         : 0,
-#         "FileNotFound"          : 0,
-#         "Exit Status 1 Error"   : 0,
-#         "Unknown Error"         : 0
-#     }        
-        
-#     totalErr = errCounts["Syntax Error"] + errCounts["Type Error"] + errCounts["Scope Error"] + errCounts["Conversion Error"] +\
-#              + errCounts["NoModuleFound Error"] + errCounts["FileNotFound Error"] + errCounts["Exit Status 1 Error"] + errCounts["Unknown Error"]
-
-#     # Main DataFrame to hold Sub Analysis Data
-#     mainDF = DataFrame({
-#         "Student IDs"        : students,
-#         "submission #"       : subNums,
-#         "submission Compiles": subCompiles,
-#         "submission Error"   : subErrors,
-#         "Error Line"         : errorLines
-#     })
-
-#     # Blank DataFrame for clearer exporting to Excel
-#     blankDF = DataFrame({"":[]})
-
-#     # DataFrames to hold error data
-#     try: dataDF = DataFrame({
-#         "Total submissions"     : [totalSub         , nan                       , nan                       ],
-#         ""                      : ["Error Count:"   , "Percent of Errors"      ,"Percent of all Submissions"],
-#         "Syntax Errors"         : [syntaxErrors     , "{0:.0f}%".format(syntaxErrors/totalErr*100)     , "{0:.0f}%".format(syntaxErrors/totalSub*100)     ],
-#         "Type Errors"           : [typeErrors       , "{0:.0f}%".format(typeErrors/totalErr*100)       , "{0:.0f}%".format(typeErrors/totalSub*100)       ],
-#         "Scope Errors"          : [scopeErrors      , "{0:.0f}%".format(scopeErrors/totalErr*100)      , "{0:.0f}%".format(scopeErrors/totalSub*100)      ],
-#         "Conversion Errors"     : [conversionErrors , "{0:.0f}%".format(conversionErrors/totalErr*100) , "{0:.0f}%".format(conversionErrors/totalSub*100) ],
-#         "NoModuleFound Errors"  : [noModuleErrors   , "{0:.0f}%".format(noModuleErrors/totalErr*100)   , "{0:.0f}%".format(noModuleErrors/totalSub*100)   ],
-#         "FileNotFound Errors"   : [missingFileErrors, "{0:.0f}%".format(missingFileErrors/totalErr*100), "{0:.0f}%".format(missingFileErrors/totalSub*100)],
-#         "Exit Status 1 Errors"  : [exitStatus1Errors, "{0:.0f}%".format(exitStatus1Errors/totalErr*100), "{0:.0f}%".format(exitStatus1Errors/totalSub*100)],
-#         "Unknown Errors"        : [unknownErrors    , "{0:.0f}%".format(unknownErrors/totalErr*100)    , "{0:.0f}%".format(unknownErrors/totalSub*100)    ],
-#         "Total Errors"          : [totalErr         , 1                                                , "{0:.0f}%".format(totalErr/totalSub*100)          ],
-#         })
-#     except ZeroDivisionError:
-#         totalErr = 1
-#         dataDF = DataFrame({
-#         "Total submissions"     : [totalSub         , nan                       , nan                       ],
-#         ""                      : ["Error Count:"   , "Percent of Errors:"    ,"Percent of all Submissions:"],
-#         "Syntax Errors"         : [syntaxErrors     , "{0:.0f}%".format(syntaxErrors/totalErr*100)     , "{0:.0f}%".format(syntaxErrors/totalSub*100)     ],
-#         "Type Errors"           : [typeErrors       , "{0:.0f}%".format(typeErrors/totalErr*100)       , "{0:.0f}%".format(typeErrors/totalSub*100)       ],
-#         "Scope Errors"          : [scopeErrors      , "{0:.0f}%".format(scopeErrors/totalErr*100)      , "{0:.0f}%".format(scopeErrors/totalSub*100)      ],
-#         "Conversion Errors"     : [conversionErrors , "{0:.0f}%".format(conversionErrors/totalErr*100) , "{0:.0f}%".format(conversionErrors/totalSub*100) ],
-#         "NoModuleFound Errors"  : [noModuleErrors   , "{0:.0f}%".format(noModuleErrors/totalErr*100)   , "{0:.0f}%".format(noModuleErrors/totalSub*100)   ],
-#         "FileNotFound Errors"   : [missingFileErrors, "{0:.0f}%".format(missingFileErrors/totalErr*100), "{0:.0f}%".format(missingFileErrors/totalSub*100)],
-#         "Exit Status 1 Errors"  : [exitStatus1Errors, "{0:.0f}%".format(exitStatus1Errors/totalErr*100), "{0:.0f}%".format(exitStatus1Errors/totalSub*100)],
-#         "Unknown Errors"        : [unknownErrors    , "{0:.0f}%".format(unknownErrors/totalErr*100)    , "{0:.0f}%".format(unknownErrors/totalSub*100)    ],
-#         "Total Errors"          : [0                , 1                                                , 0                                                ],
-#         })
-    
-
-#     # Dataframe to hold Concurent Failed submissions
-#     if ALL_SUBS:
-#         try:
-#             avgConsecFail = sum(failedList)/len(failedList)
-#             maxFailed     = max(failedList)
-#         except Exception:
-#             avgConsecFail = 0
-#             maxFailed     = 0
-#         consecFailedDF = DataFrame({
-#             "Avg Consecutive Failed Subs" : [avgConsecFail]  ,
-#             "Max Consecutive Failed Subs" : [maxFailed]      ,
-#         })
-#         finalDF = concat([mainDF, blankDF, dataDF,blankDF,consecFailedDF], axis = 1)
-#     else:
-#         finalDF = concat([mainDF, blankDF, dataDF                       ], axis = 1)
-
-#     try:
-#         finalDF.to_excel(f"{subDir} submission Analysis.xlsx"       , sheet_name = "Submission Analysis", index = False)
-#     except PermissionError:
-#         print("[ERROR] - A previous version of the spreadsheet is open\ncreating a temp spreadsheet...")
-#         finalDF.to_excel(f"{subDir}_TEMP submission Analysis.xlsx"  , sheet_name = "Submission Analysis", index = False)
 
 
 
@@ -522,7 +449,7 @@ def debug():
 
     df = concat(dfs, axis = 0)
     print(df)
-    df.to_excel("Archive.xlsx", sheet_name = "Submission Analysis", index = False)
+    df.to_excel(f"{unzippedDir} Output.xlsx", sheet_name = "Submission Analysis", index = False)
 
     os.chdir("..")
     rmtree(unzippedDir)    
