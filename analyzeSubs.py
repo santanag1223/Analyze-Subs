@@ -1,11 +1,10 @@
 import os 
 import argparse
-from pkgutil import extend_path
 from plistlib import InvalidFileException
 from shutil   import rmtree, copy
 from typing   import List
 from time     import time
-from numpy    import average, nan
+from numpy    import average
 from pandas   import DataFrame, concat
 from tqdm     import tqdm
 from concurrent.futures import ProcessPoolExecutor
