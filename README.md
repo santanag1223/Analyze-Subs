@@ -19,6 +19,7 @@ The Script has **1 required argument** and **2 optional arguments** to be passed
 
 
 ## How to run: 
+*unzip command must be installed to run*
 Terminal Input : `user$: <python / python3> analyzeSubs.py <workingDir> <-a OR -m>`
 
 Demo script with example_submissions.zip

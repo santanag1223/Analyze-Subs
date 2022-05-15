@@ -1,12 +1,12 @@
 import os 
 import argparse
-from plistlib import InvalidFileException
 from shutil   import rmtree, copy
 from typing   import List
 from time     import time
 from numpy    import average
 from pandas   import DataFrame, concat
 from tqdm     import tqdm
+from threading import Thread
 from concurrent.futures import ProcessPoolExecutor
 
 #-#-#- Command Line Parsing -#-#-#
@@ -65,7 +65,7 @@ class submission:
     sub_folder  = ""
     subNum      = 0
     timeCreated = 0.0
-    compiled    = False
+    compiled    = None
     error       = "Not Processed"
     errorLine   = ""
 
@@ -75,6 +75,18 @@ class submission:
         nozip            = folder.replace(".zip","")
         self.subNum      = int(nozip.split("_")[1])
         self.__try_compile()
+
+    def __compile_thread_func(self):
+
+        # call compilation and check for a.out
+        os.system("g++ -std=c++17 *.cpp -w 2>err.txt")
+
+        if "a.out" in os.listdir(): 
+            self.compiled    = True
+            if (ERROR_PROC): self.error  = "No Error"
+        else:
+            self.compiled    = False
+            if (ERROR_PROC): self.error  = self.__get_error()
 
     def __try_compile(self):
         """
@@ -87,27 +99,35 @@ class submission:
         try:
             temp = unzip_folder(self.sub_folder)
         except Exception: 
-            self.error = "Could not unzip submission."
-            return False
+            self.compiled = False
+            self.error  = "Could Not Unzip"
         
         # go into unzipped folder
         os.chdir(temp)
 
-        # get time created (seconds since creation) (unzipping process makes this current time)
+        # get time created
         self.timeCreated = os.path.getmtime(os.listdir()[0])
 
-        # call compilation and check for 'a.out'
-        os.system("g++ -std=c++17 *.cpp -w 2>err.txt")
+        # create thread to try compile and time
+        comp_thread = Thread(target = self.__compile_thread_func)
+        comp_thread.start()
 
-        if "a.out" in os.listdir(): 
-            self.compiled    = True
-            if (ERROR_PROC): self.error  = "No Error"
-        else:
+        # don't let the system try to compile for longer than 3.5
+        start_time, cur_time = time(), time()
+        while (cur_time - start_time < 3.5):
+            cur_time = time()
+            if not comp_thread.is_alive(): break
+
+        if comp_thread.is_alive(): 
             self.compiled    = False
-            if (ERROR_PROC): self.error  = self.__get_error()
+            if (ERROR_PROC): self.error  = "Error Compiling"
+            comp_thread.ident
+            
 
         # exit the unzipped folder and delete it
+        
         os.chdir("..")
+        
         try:   rmtree(temp)
         except PermissionError: pass
 
@@ -189,6 +209,7 @@ class student:
         subzips = list()
         for file in os.listdir():
             if file.startswith("Submission"): subzips.append(file)
+        
         subzips.sort()
 
         self.numOfSubs = len(subzips)
@@ -259,7 +280,7 @@ class student:
         print("Avg time per submission:", epoch_to_date(self.avgTime))
         print()
 
-def get_students(studentsDir: str) -> List[student]:
+def get_students(directory: str) -> List[student]:
     """
     Takes a folder name in current directory containing student directories
     deletes input directory after creating all students
@@ -269,7 +290,7 @@ def get_students(studentsDir: str) -> List[student]:
     """
     students = list()
     
-    os.chdir(studentsDir)
+    os.chdir(directory)
 
     # sorting student directories so excel output is in correct order
     studentDirs = os.listdir()
@@ -280,7 +301,7 @@ def get_students(studentsDir: str) -> List[student]:
         students.append(student(s))
 
     os.chdir("..")
-    rmtree(studentsDir)
+    rmtree(directory)
 
     return students
 
@@ -320,8 +341,6 @@ def unzip_folder(zipfile: str) -> str:
     
     returns new unzipped folder name
     """
-
-    if not zipfile.endswith(".zip"): raise InvalidFileException("ERROR: Non zipfile can not be unzipped.")
 
     newfile = zipfile.replace('.zip','')
     os.mkdir(newfile)
@@ -405,7 +424,7 @@ def print_students_info(students: List[student], dir: str) -> None:
     print(CBOLD + "Average total worktime:\t\t\t"          + CEND, epoch_to_date(average(workTimes)))
     print(CBOLD + "Average time per Submissions:\t\t"      + CEND, epoch_to_date(average(subTimes)))
     print(CBOLD + "Average Compilation Rate:\t\t"          + CEND, "{:5.2f}".format(average(compRates) * 100) + " %")
-    print(CBOLD + "Average # of submission per student:\t" + CEND, "{:5.2f}".format(average(numOfSubs)) + CEND)
+    print(CBOLD + "Average # of submission per student:\t" + CEND, "{:4.2f}".format(average(numOfSubs)) + CEND)
     print()
 
 
@@ -436,22 +455,14 @@ def proc_multi():
         proc_single(dataset)
     
 def debug():
+    
+    # unzippedDir = unzip_submissions(WORKING_DIR)
+    # os.chdir(unzippedDir)
 
-    unzippedDir = unzip_submissions(WORKING_DIR)
-    os.chdir(unzippedDir)
+    s1  = submission("Submission_0001.zip")
 
-    dfs = list()
-    s1  = student(os.listdir()[0])
-    s2  = student(os.listdir()[2])
-    dfs.append(s1.to_DataFrame())
-    dfs.append(s2.to_DataFrame())
-
-    df = concat(dfs, axis = 0)
-    print(df)
-    df.to_excel(f"{unzippedDir} Output.xlsx", sheet_name = "Submission Analysis", index = False)
-
-    os.chdir("..")
-    rmtree(unzippedDir)    
+    # os.chdir("..")
+    # rmtree(unzippedDir)    
 
 
 

@@ -6,3 +6,6 @@ demo*
 
 # Ignore Excel files created:
 *.xlsx
+
+# Ignore Working Data files
+Working Data
