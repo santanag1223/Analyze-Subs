@@ -126,9 +126,7 @@ class submission:
             
 
         # exit the unzipped folder and delete it
-        
         os.chdir("..")
-        print(temp + " Compiled: " + str(self.compiled))
 
         try:   remove_folder(temp)
         except PermissionError: pass
@@ -300,7 +298,6 @@ def get_students(directory: str) -> List[student]:
 
     for s in tqdm(studentDirs, desc = "Students", unit = "Student"):
         if not s.startswith("Student"): continue
-        print(s)
         students.append(student(s))
 
     os.chdir("..")
