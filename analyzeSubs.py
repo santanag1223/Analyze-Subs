@@ -1,10 +1,11 @@
+from distutils.log import error
 import os 
 import argparse
 from shutil   import rmtree, copy
 from typing   import List
 from time     import time
 from numpy    import average
-from pandas   import DataFrame, concat
+from pandas   import DataFrame, Series, concat
 from tqdm     import tqdm
 from threading import Thread
 from concurrent.futures import ProcessPoolExecutor
@@ -122,8 +123,6 @@ class submission:
         if comp_thread.is_alive(): 
             self.compiled    = False
             if (ERROR_PROC): self.error  = "Error Compiling"
-            comp_thread.ident
-            
 
         # exit the unzipped folder and delete it
         os.chdir("..")
@@ -259,6 +258,32 @@ class student:
             self.avgTime  = (average(times))
             self.workTime = lastTime - firstTime
 
+    def num_consec_fail(self):
+        
+        total = 0
+        prev  = None
+        for sub in self.subs:
+            if prev == None:
+                prev = sub
+                continue
+            if (not prev.compiled) and (not sub.compiled):
+                total += 1
+        
+        return total
+
+    def most_freq_error(self):
+        
+        errs = {}
+        for sub in self.subs:
+            if sub.error == "No Error": continue
+
+            if sub.error in errs:   errs[sub.error] += 1
+            else:                   errs[sub.error] = 1
+        
+        if len(errs) == 0:  return "No Errors"
+        else:               return max(errs, key=errs.get)
+
+
     def to_DataFrame(self):
 
         df = DataFrame({
@@ -267,7 +292,11 @@ class student:
             "Compile Rate"          : [self.compRate],
             "Average Time per Sub"  : [epoch_to_date(self.avgTime)],
             "Total Work Time"       : [epoch_to_date(self.workTime)],
+            "Consecutive Failures"  : [self.num_consec_fail()]
         })
+
+        if ERROR_PROC:
+            df["Most Frequent Error"] = [self.most_freq_error()]
 
         return df
 
@@ -382,12 +411,6 @@ def error_search(keywords: List[str], errorLine: str) -> bool:
     for key in keywords:
         if errorLine.find(key) != -1: return True
     return False
-
-def subs_failed(sub1: submission, sub2: submission) -> bool:
-    """
-    Checks if two submissions both could not be compiled.
-    """
-    return (sub1.is_compiled == False) and (sub2.is_compiled == False)
 
 def epoch_to_date(epoch: float) -> str:
     """
