@@ -101,6 +101,7 @@ class submission:
         except Exception: 
             self.compiled = False
             self.error  = "Could Not Unzip"
+            return
         
         # go into unzipped folder
         os.chdir(temp)
@@ -127,8 +128,9 @@ class submission:
         # exit the unzipped folder and delete it
         
         os.chdir("..")
-        
-        try:   rmtree(temp)
+        print(temp + " Compiled: " + str(self.compiled))
+
+        try:   remove_folder(temp)
         except PermissionError: pass
 
     def __get_error(self) -> str:
@@ -298,10 +300,11 @@ def get_students(directory: str) -> List[student]:
 
     for s in tqdm(studentDirs, desc = "Students", unit = "Student"):
         if not s.startswith("Student"): continue
+        print(s)
         students.append(student(s))
 
     os.chdir("..")
-    rmtree(directory)
+    remove_folder(directory)
 
     return students
 
@@ -369,6 +372,9 @@ def unzip_submissions(subZip: str) -> str:
             quit()
     
     return unzippedDir
+
+def remove_folder(folder: str) -> None:
+    os.system("rm -r " + folder)
 
 def error_search(keywords: List[str], errorLine: str) -> bool:
     """
