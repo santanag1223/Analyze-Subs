@@ -503,15 +503,15 @@ def proc_single(workingDir: str, proc_errors: bool = False, from_excel: bool = F
         - `from_excel: bool` used to denote when students are sourced from excel file. (Optional).
 
     Generates an excel output for the set and prints basic information gathered from the students.\n
-    Returns a dataframe of the students (same dataframe that is output as an excel) 
+    Returns a dataframe of the students (same dataframe that is output as an excel).
     """
     
     if from_excel:
-        students = get_students(workingDir, proc_errors, from_excel)
+        students = get_students(workingDir, proc_errors, True)
         print_students_info(students, workingDir)
     else:
         unzippedDir = unzip_submissions(workingDir)
-        students = get_students(unzippedDir, proc_errors, from_excel)
+        students    = get_students(unzippedDir, proc_errors, False)
         print_students_info(students, unzippedDir)
     
 
@@ -525,14 +525,15 @@ def proc_single(workingDir: str, proc_errors: bool = False, from_excel: bool = F
     
     return df
     
-def proc_multi(workingDir: str = False, proc_errors: bool = False):
+def proc_multi(workingDir: str, proc_errors: bool = False):
     """
     Compiles multiple datasets.\n
     Arguements:
         - `workingDir: str` should be the name to a zipfile in the current directory or a path to a zipfile from the root directory.
         - `proc_errors: bool` is used to process errors (Optional).
 
-    Generates an excel output for each set, as well as one containing all sets together.
+    Generates an excel output for each set, as well as one containing all sets together.\n
+    Returns a dataframe of the students (same dataframe that is output as an excel).
     """
     
     os.chdir(workingDir)
@@ -545,13 +546,15 @@ def proc_multi(workingDir: str = False, proc_errors: bool = False):
         
         try:
             dfs.append(proc_single(zipfile, proc_errors, False))
-        except Exception:
-            print("[ERROR]: " + zipfile + " analysis failed")
+        except Exception as e:
+            print("[ERROR]: " + zipfile + " analysis failed", e)
             continue
 
     # output all students in all datasets in single excel
     df  = concat(dfs, axis=0)
     df.to_excel("Multiple Dataset output.xlsx", sheet_name = "Submission Analysis", index = False)
+    
+    return df
 
     
 def debug(workingDir: str, proc_errors: bool, multiSet: bool, fromExcel: bool):
