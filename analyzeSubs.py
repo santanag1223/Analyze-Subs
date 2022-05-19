@@ -1,11 +1,10 @@
-from distutils.log import error
 import os 
 import argparse
-from shutil   import rmtree, copy
+from shutil   import copy
 from typing   import List
 from time     import time
-from numpy    import average
-from pandas   import DataFrame, Series, concat
+from numpy    import average, ndarray
+from pandas   import DataFrame, concat, read_excel
 from tqdm     import tqdm
 from threading import Thread
 from concurrent.futures import ProcessPoolExecutor
@@ -18,23 +17,13 @@ def get_args():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("workingDir"            , help = "zipped submissions file in current directory or full path to file", type = str)
-    parser.add_argument("-a", "--allSubs"       , help = "compile all submissions"     , action = "store_true")
-    parser.add_argument("-f", "--fromArchive"   , help = "Read submissions from excel" , action = "store_true")
+    parser.add_argument("-f", "--fromExcel"     , help = "Read submissions from excel" , action = "store_true")
     parser.add_argument("-m", "--multiSet"      , help = "Folder to multiple sets"     , action = "store_true")
     parser.add_argument("-e", "--errorProc"     , help = "Processes submission errors" , action = "store_true")
     parser.add_argument("-d", "--debugging"     , help = "Run the debugging function"  , action = "store_true")
     args   = parser.parse_args()
 
     return args
-
-#-#-#- Global Variables for Script Arguements -#-#-#
-args        = get_args()
-WORKING_DIR = args.workingDir
-ERROR_PROC  = args.errorProc 
-ALL_SUBS    = args.allSubs
-MUTISET     = args.multiSet
-DEBUGGING   = args.debugging
-FROM_ARCH   = args.fromArchive
 
 #-#-#- Global Variables for text formatting -#-#-#
 CEND      = '\33[0m'
@@ -45,16 +34,10 @@ CWHITE    = '\33[37m'
 CBOLD     = '\33[1m'
 CWHITEBG  = '\33[47m'
 
-
-
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 #-#-#- submission and student Classes #-#-#
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-
 class submission:
     """
     submission Class acts as a container for all submission data.\n
-
     Each submissions holds:
     - submission Folder Name
     - submission Number
@@ -67,14 +50,18 @@ class submission:
     subNum      = 0
     timeCreated = 0.0
     compiled    = None
+    
+    proc_err    = False
     error       = "Not Processed"
     errorLine   = ""
 
-    def __init__(self, folder: str):
+    def __init__(self, folder: str, proc_err = False):
         """ submission constructor expects a submission zipfile (Submission_<NUM>.zip)"""
         self.sub_folder  = folder
         nozip            = folder.replace(".zip","")
         self.subNum      = int(nozip.split("_")[1])
+        self.proc_err    = proc_err
+
         self.__try_compile()
 
     def __compile_thread_func(self):
@@ -84,10 +71,9 @@ class submission:
 
         if "a.out" in os.listdir(): 
             self.compiled    = True
-            if (ERROR_PROC): self.error  = "No Error"
+            if (self.proc_err): self.error  = "No Error"
         else:
             self.compiled    = False
-            if (ERROR_PROC): self.error  = self.__get_error()
 
     def __try_compile(self):
         """
@@ -114,21 +100,23 @@ class submission:
         comp_thread = Thread(target = self.__compile_thread_func)
         comp_thread.start()
 
-        # don't let the system try to compile for longer than 3.5
+        # don't let the system try to compile for longer than 3.5 sec
         start_time, cur_time = time(), time()
         while (cur_time - start_time < 3.5):
             cur_time = time()
             if not comp_thread.is_alive(): break
-
+            
         if comp_thread.is_alive(): 
-            self.compiled    = False
-            if (ERROR_PROC): self.error  = "Error Compiling"
+            self.compiled = False
+            if (self.proc_err): self.error  = "Error when compiling"
+        
+        if self.compiled == False: self.error  = self.__get_error()
 
         # exit the unzipped folder and delete it
         os.chdir("..")
 
         try:   remove_folder(temp)
-        except PermissionError: pass
+        except Exception: pass
 
     def __get_error(self) -> str:
         """
@@ -176,28 +164,47 @@ class submission:
 
 class student:
     """
-    student class acts like a container for each student's submissions and basic info about student
-
+    student class acts like a container for each student's submissions and basic info about student\n
     Each student holds:
     - Student ID
     - All of the student's submissions
     - Compile Rate
-    - time between first and last submission (unzipping causes conflict)
-    - average time between submissions (unzipping causes conflict)
+    - time between first and last submission (in epoch time)
+    - average time between submissions (in epoch time)
     """
 
     studentID = ""
     compRate  = 1.00
     numOfSubs = 0
+
     workTime  = 0.0
     avgTime   = 0.0
-    subs      = list()
 
-    def __init__(self, folder: str):
-        """student constructor expects a student directory from an unzipped data set"""
-        self.studentID = folder.split(" ")[1]
-        self.__get_subs(folder)
-        if ALL_SUBS: self.__set_times()
+    proc_err       = False
+    subs           = list()
+
+    def __init__(self, inputStr: str, proc_err = False, fromExcel = False):
+        """
+        The student constructor forms a student object differently based on the given input.\n
+        If the inputStr is from a previously compiled excel output, it can parse the string for student information and rebuild the student
+        structure, only without it's individual submissions. \n
+        If the inputStr is a folder name from within a dataset, it still needs to be processed. This is done using the 
+        __get_subs() and __set_times() methods in the constructor.
+        """
+
+        if fromExcel:
+            cols = inputStr.split(" ")
+            self.studentID = cols[0]
+            self.numOfSubs = int(cols[1])
+            self.compRate  = float(cols[2])
+            self.avgTime   = date_to_epoch(cols[3])
+            self.workTime  = date_to_epoch(cols[4])
+        else: 
+            self.studentID = inputStr.split(" ")[1]
+            self.proc_err = proc_err
+            self.__get_subs(inputStr)
+            self.__set_times()
+
 
     def __get_subs(self, folder: str):
 
@@ -214,33 +221,24 @@ class student:
         self.numOfSubs = len(subzips)
         compiledSubs   = 0
 
-        if ALL_SUBS:
-            # use multiprocessing to compile submissions
-            with ProcessPoolExecutor() as exe:
-                subs = exe.map(submission, subzips) # subs is a generator fo all of our submission objects
-                self.subs = [_ for _ in subs]       # extract the subs in order using list comprehension
+        # use multiprocessing to compile submissions
+        with ProcessPoolExecutor() as exe:
+            results   = [exe.submit(submission, zipfile, self.proc_err) for zipfile in subzips]
+            self.subs = [sub.result() for sub in results]
 
-            # calculate compilation rate for student
-            for sub in self.subs:
-                if sub.compiled: compiledSubs += 1
-            self.compRate = compiledSubs / self.numOfSubs
-
-        else:
-            currentSub = submission(subzips[-1])
-            self.subs.append(currentSub)
-
-            # calculate compile rate out of 1
-            if currentSub.compiled: self.compRate = 1   
-            else:                   self.compRate = 0
+        # calculate compilation rate for student
+        for sub in self.subs:
+            if sub.compiled: compiledSubs += 1
+        self.compRate = compiledSubs / self.numOfSubs
 
         # return to beginning directory
         os.chdir("..")
 
     def __set_times(self):
 
-        times     = list() # list of times to average
-        firstTime = None   # first submission time
-        lastTime  = None   # submission time of last submission
+        times     = list()      # list of times to average
+        firstTime = None        # first submission time
+        lastTime  = None        # submission time of last submission
         for sub in self.subs:
             if lastTime == None:
                 firstTime = sub.timeCreated
@@ -259,7 +257,9 @@ class student:
             self.workTime = lastTime - firstTime
 
     def num_consec_fail(self):
-        
+        """
+        Function to get the number of consecutive submissions that didn't compile for the student.
+        """
         total = 0
         prev  = None
         for sub in self.subs:
@@ -272,7 +272,9 @@ class student:
         return total
 
     def most_freq_error(self):
-        
+        """
+        Function to get the most common error for the student.
+        """
         errs = {}
         for sub in self.subs:
             if sub.error == "No Error": continue
@@ -295,7 +297,7 @@ class student:
             "Consecutive Failures"  : [self.num_consec_fail()]
         })
 
-        if ERROR_PROC:
+        if self.proc_err:
             df["Most Frequent Error"] = [self.most_freq_error()]
 
         return df
@@ -309,28 +311,36 @@ class student:
         print("Avg time per submission:", epoch_to_date(self.avgTime))
         print()
 
-def get_students(directory: str) -> List[student]:
+def get_students(src: str, proc_errors: bool, from_excel: bool) -> List[student]:
     """
-    Takes a folder name in current directory containing student directories
-    deletes input directory after creating all students
-    
-    returns a list of student objects, each containing their own submissions
-
+    Takes a source to student information should be retrieved from and returns a list of student objects.\n
+    Source inputs:
+    - File name of an excel file within the current directory (using -f or --fromExcel flag when running)
+    - a directory containing student folders (default operation)
     """
     students = list()
     
-    os.chdir(directory)
+    if from_excel:
+        df = read_excel(src)
+        for row in df.values:
+            currRow = row_to_string(row)
+            students.append(student(currRow, fromExcel=True))
 
-    # sorting student directories so excel output is in correct order
-    studentDirs = os.listdir()
-    studentDirs.sort()
+    else:
+        os.chdir(src)
 
-    for s in tqdm(studentDirs, desc = "Students", unit = "Student"):
-        if not s.startswith("Student"): continue
-        students.append(student(s))
+        # sorting student directories so excel output is in correct order
+        studentDirs = os.listdir()
+        studentDirs.sort()
 
-    os.chdir("..")
-    remove_folder(directory)
+        for folder in tqdm(studentDirs, desc = "Students", unit = "Student"):
+            if not folder.startswith("Student"): continue
+
+            try:                students.append(student(folder, proc_errors))
+            except Exception as e:   print("[ERROR]: " + folder + " Failed ", e)
+
+        os.chdir("..")
+        remove_folder(src)
 
     return students
 
@@ -378,8 +388,7 @@ def unzip_folder(zipfile: str) -> str:
 
 def unzip_submissions(subZip: str) -> str:
     """
-    Determines how to unzip submission zip
-    
+    Determines how to unzip submission zip\n
     returns the new unzipped folder name
     """
     if is_path(subZip):
@@ -400,7 +409,10 @@ def unzip_submissions(subZip: str) -> str:
     return unzippedDir
 
 def remove_folder(folder: str) -> None:
-    os.system("rm -r " + folder)
+    """
+    Force remove a file or folder from directory.
+    """
+    os.system("rm -rf " + folder)
 
 def error_search(keywords: List[str], errorLine: str) -> bool:
     """
@@ -414,7 +426,7 @@ def error_search(keywords: List[str], errorLine: str) -> bool:
 
 def epoch_to_date(epoch: float) -> str:
     """
-    Takes a epoch time (in seconds) and returns a string with the epoch amount in days, hours, minutes, and seconds.
+    Takes a epoch time (seconds since 1/1/1970) and returns a string with the time amount in days, hours, minutes, and seconds.
     """
     days  =  int(epoch / (60*60*24))
     epoch -= days * (60*60*24)
@@ -426,79 +438,145 @@ def epoch_to_date(epoch: float) -> str:
 
     return "{:02d}:{:02d}:{:02d}:{:05.2f}".format(days, hours, mins, secs)
 
+def date_to_epoch(date: str) -> float:
+    """
+    Takes a formatted time (d:h:m:s) and returns a float in epoch time (seconds since 1/1/1970)
+    """
+    times = date.split(":")
+    days  = int(times[0]) * (60*60*24)
+    hours = int(times[1]) * (60*60)
+    mins  = int(times[2]) * (60)
+    secs  = float(times[3])
+
+    return days + hours + mins + secs
+
+def row_to_string(row: ndarray) -> str:
+    """
+    Converts a row from a Dataframe into strings.
+    """
+    finalstr = ""
+    for elem in row:
+        finalstr += str(elem) + " "
+
+    return finalstr
+
 def print_students_info(students: List[student], dir: str) -> None:
     """
-    Takes a list of students and prints information about the students
+    Prints some information about a list of students\n
+    Arguements:
+        - `students: List[student]` is the list of students the function will calculate data from.
+        - `dir: str` is the directory the student's were originally located.
     """
 
     workTimes = list()
     subTimes  = list()
-    compRates = list()
-    numOfSubs = list()
+    totalComp = 0
+    totalSubs = list()
     for s in students:
-        workTimes.append(s.workTime)
-        subTimes.append(s.avgTime)
-        compRates.append(s.compRate)
-        numOfSubs.append(s.numOfSubs)
+        if s.workTime != 0: workTimes.append(s.workTime)
+        if s.avgTime  != 0: subTimes.append(s.avgTime)
+        totalComp += int(s.compRate * s.numOfSubs)
+        totalSubs.append(s.numOfSubs)
 
     print()
     print(CITALIC + "For students in " + CYELLOW + "\"" + dir + "\" " + CEND + ":\n")
 
     print("Toral Number of Students:\t"    + CWHITEBG + CBLACK + "{:3d}".format(len(students))  + CEND)
-    print("Total Number of Submissions:\t" + CWHITEBG + CBLACK + "{:3d}".format(sum(numOfSubs)) + CEND + "\n")
+    print("Total Number of Submissions:\t" + CWHITEBG + CBLACK + "{:3d}".format(sum(totalSubs)) + CEND + "\n")
 
     print(CBOLD + "Average total worktime:\t\t\t"          + CEND, epoch_to_date(average(workTimes)))
     print(CBOLD + "Average time per Submissions:\t\t"      + CEND, epoch_to_date(average(subTimes)))
-    print(CBOLD + "Average Compilation Rate:\t\t"          + CEND, "{:5.2f}".format(average(compRates) * 100) + " %")
-    print(CBOLD + "Average # of submission per student:\t" + CEND, "{:4.2f}".format(average(numOfSubs)) + CEND)
+    print(CBOLD + "Average Compilation Rate:\t\t"          + CEND, "{:5.2f}".format(totalComp / sum(totalSubs)*100) + " %")
+    print(CBOLD + "Average # of submission per student:\t" + CEND, "{:4.2f}".format(average(totalSubs)) + CEND)
     print()
 
 
 
 
 #-#-#- Main Functions of the Script  -#-#-#
-def proc_single(workingDir: str):
+def proc_single(workingDir: str, proc_errors: bool = False, from_excel: bool = False):
+    """
+    Compiles a single set.\n
+    Arguements:
+        - `workingDir: str` should be the name to a zipfile in the current directory or a path to a zipfile from the root directory.
+        - `proc_errors: bool` is used to process errors (Optional).
+        - `from_excel: bool` used to denote when students are sourced from excel file. (Optional).
+
+    Generates an excel output for the set and prints basic information gathered from the students.\n
+    Returns a dataframe of the students (same dataframe that is output as an excel) 
+    """
     
-    unzippedDir = unzip_submissions(workingDir)
+    if from_excel:
+        students = get_students(workingDir, proc_errors, from_excel)
+        print_students_info(students, workingDir)
+    else:
+        unzippedDir = unzip_submissions(workingDir)
+        students = get_students(unzippedDir, proc_errors, from_excel)
+        print_students_info(students, unzippedDir)
+    
 
-    students = get_students(unzippedDir)
-
-    print_students_info(students, unzippedDir)
-
+    # create dataframe containing all students from set
     dfs = [s.to_DataFrame() for s in students]
     df  = concat(dfs, axis=0)
-    df.to_excel(f"{unzippedDir} Output.xlsx", sheet_name = "Submission Analysis", index = False)
+
+    # output current dataset as excel
+    if not from_excel: df.to_excel(f"{unzippedDir} output.xlsx", sheet_name = "Submission Analysis", index = False)
+    else:              print(df)
     
-def proc_multi():
+    return df
+    
+def proc_multi(workingDir: str = False, proc_errors: bool = False):
     """
-    Compiles submissions from mulitple datasets and `outputs` to one excel sheet.
-    - Assumes subdir passed is a directory with multiple datasets.
-    - Compiles all submissions.
+    Compiles multiple datasets.\n
+    Arguements:
+        - `workingDir: str` should be the name to a zipfile in the current directory or a path to a zipfile from the root directory.
+        - `proc_errors: bool` is used to process errors (Optional).
+
+    Generates an excel output for each set, as well as one containing all sets together.
     """
     
-    os.chdir(WORKING_DIR)
-    for dataset in os.listdir():
-        proc_single(dataset)
+    os.chdir(workingDir)
+
+    # create list to contain students from all datasets
+    dfs = list()
+
+    for zipfile in os.listdir():
+        if not zipfile.endswith(".zip"): continue
+        
+        try:
+            dfs.append(proc_single(zipfile, proc_errors, False))
+        except Exception:
+            print("[ERROR]: " + zipfile + " analysis failed")
+            continue
+
+    # output all students in all datasets in single excel
+    df  = concat(dfs, axis=0)
+    df.to_excel("Multiple Dataset output.xlsx", sheet_name = "Submission Analysis", index = False)
+
     
-def debug():
-    
-    # unzippedDir = unzip_submissions(WORKING_DIR)
-    # os.chdir(unzippedDir)
-
-    s1  = submission("Submission_0001.zip")
-
-    # os.chdir("..")
-    # rmtree(unzippedDir)    
-
+def debug(workingDir: str, proc_errors: bool, multiSet: bool, fromExcel: bool):
+    """
+    Method used for debugging.\n
+    No real functionalities    
+    """
+    students = get_students(workingDir, proc_errors, fromExcel)
+    print_students_info(students, workingDir)
 
 
 #-#-#-  Call to '__main__' function   #-#-#
 if __name__ == '__main__':
     start    = time()
 
-    if   DEBUGGING:   debug()
-    elif MUTISET:     proc_multi()
-    else:             proc_single(WORKING_DIR)
+    args        = get_args()
+    workingDir  = args.workingDir
+    proc_errors = args.errorProc 
+    multiSet    = args.multiSet
+    debugging   = args.debugging
+    fromExcel   = args.fromExcel
+
+    if   debugging:   debug(workingDir, proc_errors, multiSet, fromExcel)
+    elif multiSet:    proc_multi(workingDir, proc_errors)
+    else:             proc_single(workingDir, proc_errors, fromExcel)
 
     end     = time()
     run     = end - start
