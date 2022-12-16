@@ -9,3 +9,6 @@ demo*
 
 # Ignore Working Data files
 Working Data
+
+# Ignore __pycache__
+__pycache__
