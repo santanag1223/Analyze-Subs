@@ -2,7 +2,7 @@
 # Homework Analyzer - `Analyzer.py`
 
 ## Description:
-Python script that takes C++ homework submissions from Mirmir Classroom (now shutdown) and scrapes files for metadata to track student performance.
+Python script that takes C++ homework submissions from Mimir Classroom (now shutdown) and scrapes files for metadata to track student performance.
 
 ## Arguments:
 The script has **1 required argument** and **1 optional argument** to be passed when running:
